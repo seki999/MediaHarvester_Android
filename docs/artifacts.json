@@ -1,0 +1,20 @@
+[
+  {
+    "file": "MediaHarvester-0.1.0-arm64-debug.apk",
+    "bytes": 82874943,
+    "MiB": 79.04,
+    "sha256": "9764f72bbea8bee13cef3cc4822d2f0c509fc2b5d2c10d73ad7e0a69abdf1bd6"
+  },
+  {
+    "file": "MediaHarvester-0.1.0-arm64-release-unsigned.apk",
+    "bytes": 77306342,
+    "MiB": 73.73,
+    "sha256": "de680bffe4dfe49112c7f9f8f799582872cfa826bb862c64fa7b7cdbd9002c49"
+  },
+  {
+    "file": "MediaHarvester-0.1.0-universal-debug.apk",
+    "bytes": 136092668,
+    "MiB": 129.79,
+    "sha256": "1a403bf03e366cb5f3bd550cf6fbfb0339b13bfdf053934bb78c6d6113941496"
+  }
+]

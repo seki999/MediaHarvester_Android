@@ -1,0 +1,54 @@
+name: Android
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - run: chmod +x gradlew
+      - run: ./gradlew :domain:test :downloader:test :extractor:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: debug-and-reports
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            **/build/reports/
+  device-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x gradlew
+      - run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: ./gradlew :app:connectedDebugAndroidTest :database:connectedDebugAndroidTest --console=plain
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: device-reports
+          path: '**/build/reports/androidTests/'

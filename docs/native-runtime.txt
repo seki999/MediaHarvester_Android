@@ -1,0 +1,157 @@
+--------- beginning of main
+yt-dlp: 2025.11.12
+
+ffmpeg version 7.1.1 Copyright (c) 2000-2025 the FFmpeg developers
+built with Android (13624864, +pgo, +bolt, +lto, +mlgo, based on r530567e) clang version 19.0.1 (https://android.googlesource.com/toolchain/llvm-project 97a699bf4812a18fb657c2779f5296a4ab2694d2)
+configuration: --arch=x86_64 --as=x86_64-linux-android-clang --cc=x86_64-linux-android-clang --cxx=x86_64-linux-android-clang++ --nm=llvm-nm --ar=llvm-ar --ranlib=llvm-ranlib --pkg-config=/home/builder/.termux-build/_cache/android-r28c-api-24-v1/bin/pkg-config --strip=llvm-strip --cross-prefix=x86_64-linux-android- --disable-indevs --disable-outdevs --enable-indev=lavfi --disable-static --disable-symver --enable-cross-compile --enable-gnutls --enable-gpl --enable-version3 --enable-jni --enable-lcms2 --enable-libaom --enable-libass --enable-libbluray --enable-libdav1d --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libgme --enable-libharfbuzz --enable-libmp3lame --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopenmpt --enable-libopus --enable-librav1e --enable-librubberband --enable-libsoxr --enable-libsrt --enable-libssh --enable-libsvtav1 --enable-libtheora --enable-libv4l2 --enable-libvidstab --enable-libvmaf --enable-libvo-amrwbenc --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-mediacodec --enable-opencl --enable-shared --prefix=/data/data/com.termux/files/usr --target-os=android --extra-libs=-landroid-glob --disable-vulkan --disable-libfdk-aac
+libavutil      59. 39.100 / 59. 39.100
+libavcodec     61. 19.101 / 61. 19.101
+libavformat    61.  7.100 / 61.  7.100
+libavdevice    61.  3.100 / 61.  3.100
+libavfilter    10.  4.100 / 10.  4.100
+libswscale      8.  3.100 /  8.  3.100
+libswresample   5.  3.100 /  5.  3.100
+libpostproc    58.  3.100 / 58.  3.100
+
+
+  configuration:
+    --arch=x86_64
+    --as=x86_64-linux-android-clang
+    --cc=x86_64-linux-android-clang
+    --cxx=x86_64-linux-android-clang++
+    --nm=llvm-nm
+    --ar=llvm-ar
+    --ranlib=llvm-ranlib
+    --pkg-config=/home/builder/.termux-build/_cache/android-r28c-api-24-v1/bin/pkg-config --strip=llvm-strip
+    --cross-prefix=x86_64-linux-android-
+    --disable-indevs
+    --disable-outdevs
+    --enable-indev=lavfi
+    --disable-static
+    --disable-symver
+    --enable-cross-compile
+    --enable-gnutls
+    --enable-gpl
+    --enable-version3
+    --enable-jni
+    --enable-lcms2
+    --enable-libaom
+    --enable-libass
+    --enable-libbluray
+    --enable-libdav1d
+    --enable-libfontconfig
+    --enable-libfreetype
+    --enable-libfribidi
+    --enable-libgme
+    --enable-libharfbuzz
+    --enable-libmp3lame
+    --enable-libopencore-amrnb
+    --enable-libopencore-amrwb
+    --enable-libopenmpt
+    --enable-libopus
+    --enable-librav1e
+    --enable-librubberband
+    --enable-libsoxr
+    --enable-libsrt
+    --enable-libssh
+    --enable-libsvtav1
+    --enable-libtheora
+    --enable-libv4l2
+    --enable-libvidstab
+    --enable-libvmaf
+    --enable-libvo-amrwbenc
+    --enable-libvorbis
+    --enable-libvpx
+    --enable-libwebp
+    --enable-libx264
+    --enable-libx265
+    --enable-libxml2
+    --enable-libxvid
+    --enable-libzimg
+    --enable-libzmq
+    --enable-mediacodec
+    --enable-opencl
+    --enable-shared
+    --prefix=/data/data/com.termux/files/usr
+    --target-os=android
+    --extra-libs=-landroid-glob
+    --disable-vulkan
+    --disable-libfdk-aac
+yt-dlp: 2025.11.12
+
+ffmpeg version 7.1.1 Copyright (c) 2000-2025 the FFmpeg developers
+built with Android (13624864, +pgo, +bolt, +lto, +mlgo, based on r530567e) clang version 19.0.1 (https://android.googlesource.com/toolchain/llvm-project 97a699bf4812a18fb657c2779f5296a4ab2694d2)
+configuration: --arch=x86_64 --as=x86_64-linux-android-clang --cc=x86_64-linux-android-clang --cxx=x86_64-linux-android-clang++ --nm=llvm-nm --ar=llvm-ar --ranlib=llvm-ranlib --pkg-config=/home/builder/.termux-build/_cache/android-r28c-api-24-v1/bin/pkg-config --strip=llvm-strip --cross-prefix=x86_64-linux-android- --disable-indevs --disable-outdevs --enable-indev=lavfi --disable-static --disable-symver --enable-cross-compile --enable-gnutls --enable-gpl --enable-version3 --enable-jni --enable-lcms2 --enable-libaom --enable-libass --enable-libbluray --enable-libdav1d --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libgme --enable-libharfbuzz --enable-libmp3lame --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopenmpt --enable-libopus --enable-librav1e --enable-librubberband --enable-libsoxr --enable-libsrt --enable-libssh --enable-libsvtav1 --enable-libtheora --enable-libv4l2 --enable-libvidstab --enable-libvmaf --enable-libvo-amrwbenc --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx264 --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-libzmq --enable-mediacodec --enable-opencl --enable-shared --prefix=/data/data/com.termux/files/usr --target-os=android --extra-libs=-landroid-glob --disable-vulkan --disable-libfdk-aac
+libavutil      59. 39.100 / 59. 39.100
+libavcodec     61. 19.101 / 61. 19.101
+libavformat    61.  7.100 / 61.  7.100
+libavdevice    61.  3.100 / 61.  3.100
+libavfilter    10.  4.100 / 10.  4.100
+libswscale      8.  3.100 /  8.  3.100
+libswresample   5.  3.100 /  5.  3.100
+libpostproc    58.  3.100 / 58.  3.100
+
+
+  configuration:
+    --arch=x86_64
+    --as=x86_64-linux-android-clang
+    --cc=x86_64-linux-android-clang
+    --cxx=x86_64-linux-android-clang++
+    --nm=llvm-nm
+    --ar=llvm-ar
+    --ranlib=llvm-ranlib
+    --pkg-config=/home/builder/.termux-build/_cache/android-r28c-api-24-v1/bin/pkg-config --strip=llvm-strip
+    --cross-prefix=x86_64-linux-android-
+    --disable-indevs
+    --disable-outdevs
+    --enable-indev=lavfi
+    --disable-static
+    --disable-symver
+    --enable-cross-compile
+    --enable-gnutls
+    --enable-gpl
+    --enable-version3
+    --enable-jni
+    --enable-lcms2
+    --enable-libaom
+    --enable-libass
+    --enable-libbluray
+    --enable-libdav1d
+    --enable-libfontconfig
+    --enable-libfreetype
+    --enable-libfribidi
+    --enable-libgme
+    --enable-libharfbuzz
+    --enable-libmp3lame
+    --enable-libopencore-amrnb
+    --enable-libopencore-amrwb
+    --enable-libopenmpt
+    --enable-libopus
+    --enable-librav1e
+    --enable-librubberband
+    --enable-libsoxr
+    --enable-libsrt
+    --enable-libssh
+    --enable-libsvtav1
+    --enable-libtheora
+    --enable-libv4l2
+    --enable-libvidstab
+    --enable-libvmaf
+    --enable-libvo-amrwbenc
+    --enable-libvorbis
+    --enable-libvpx
+    --enable-libwebp
+    --enable-libx264
+    --enable-libx265
+    --enable-libxml2
+    --enable-libxvid
+    --enable-libzimg
+    --enable-libzmq
+    --enable-mediacodec
+    --enable-opencl
+    --enable-shared
+    --prefix=/data/data/com.termux/files/usr
+    --target-os=android
+    --extra-libs=-landroid-glob
+    --disable-vulkan
+    --disable-libfdk-aac

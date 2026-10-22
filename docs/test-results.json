@@ -1,0 +1,42 @@
+[
+  {
+    "module": "domain",
+    "suite": "com.mediaharvester.domain.DomainTest",
+    "tests": 6,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  {
+    "module": "downloader",
+    "suite": "com.mediaharvester.downloader.HttpEngineTest",
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  {
+    "module": "extractor",
+    "suite": "com.mediaharvester.extractor.HtmlImagesTest",
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  {
+    "module": "app-device",
+    "suite": "com.mediaharvester.app.IntegrationTest",
+    "tests": 9,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  {
+    "module": "database-device",
+    "suite": "com.mediaharvester.database.RecoveryTest",
+    "tests": 2,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  }
+]
