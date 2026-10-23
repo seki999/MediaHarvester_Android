@@ -16,9 +16,23 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
       - name: Install required Android SDK packages
+        shell: bash
         run: |
+          set -euo pipefail
           : "${ANDROID_HOME:?ANDROID_HOME must point to the preinstalled Android SDK}"
-          sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0'
+          SDKMANAGER=""
+          for candidate in "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager" "$ANDROID_HOME/tools/bin/sdkmanager"; do
+            if [[ -x "$candidate" ]]; then
+              SDKMANAGER="$candidate"
+              break
+            fi
+          done
+          if [[ -z "$SDKMANAGER" ]]; then
+            echo "::error::sdkmanager executable not found under ANDROID_HOME=$ANDROID_HOME"
+            find "$ANDROID_HOME/cmdline-tools" -maxdepth 4 -name sdkmanager -print || true
+            exit 1
+          fi
+          "$SDKMANAGER" --install 'platforms;android-35' 'build-tools;35.0.0'
       - run: chmod +x gradlew
       - run: ./gradlew :domain:test :downloader:test :extractor:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain
       - uses: actions/upload-artifact@v4
