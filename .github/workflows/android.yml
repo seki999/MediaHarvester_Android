@@ -14,18 +14,25 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
-      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Install required Android SDK packages
+        run: |
+          : "${ANDROID_HOME:?ANDROID_HOME must point to the preinstalled Android SDK}"
+          sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0'
       - run: chmod +x gradlew
       - run: ./gradlew :domain:test :downloader:test :extractor:testDebugUnitTest :app:assembleDebug :app:lintDebug --console=plain
       - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: MediaHarvester-Android-Debug-APK
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: debug-and-reports
-          path: |
-            app/build/outputs/apk/debug/*.apk
-            **/build/reports/
+          name: build-reports
+          path: '**/build/reports/'
+          if-no-files-found: ignore
   device-tests:
     runs-on: ubuntu-latest
     steps:
