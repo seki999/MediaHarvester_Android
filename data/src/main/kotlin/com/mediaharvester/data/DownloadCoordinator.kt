@@ -46,7 +46,14 @@ class DownloadCoordinator(private val context: Context, private val http: Downlo
   val p=settings.flow.value
   val ext = if(conversion.isNotEmpty()) conversion else format?.ext ?: media.title.substringAfterLast('.', "")
   val title = if(p.naming=="timestamp") "${System.currentTimeMillis()}_${media.title}" else media.title
-  dao.save(TaskEntity(url=media.url,title=title,mime=if(conversion.isNotEmpty() && conversion!="mp4" || format?.audioOnly==true) "audio/${ext.ifEmpty { "mp4" }}" else media.mime,website=media.website,selector=format?.id.orEmpty(),conversion=conversion,total=format?.size?.takeIf { it>0 } ?: media.size,destination=p.directory,gallery=p.gallery))
+  control.withLock {
+   val existing=dao.all().lastOrNull { it.url==media.url && it.selector==format?.id.orEmpty() && it.conversion==conversion && it.destination==p.directory && it.gallery==p.gallery && it.state !in listOf("COMPLETED","CANCELLED") }
+   if(existing!=null) {
+    if(existing.state in listOf("PAUSED","FAILED","WAITING_NETWORK")) dao.transition(existing.id,existing.state,"QUEUED","正在恢复已有任务并刷新媒体地址")
+    return@withLock
+   }
+   dao.save(TaskEntity(url=media.url,title=title,mime=if(conversion.isNotEmpty() && conversion!="mp4" || format?.audioOnly==true) "audio/${ext.ifEmpty { "mp4" }}" else media.mime,website=media.website,selector=format?.id.orEmpty(),conversion=conversion,total=format?.size?.takeIf { it>0 } ?: media.size,destination=p.directory,gallery=p.gallery))
+  }
  }
  suspend fun action(id: String, action: String, reason: String = "") = control.withLock {
   val task=dao.get(id) ?: return@withLock
