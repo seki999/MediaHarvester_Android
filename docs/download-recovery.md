@@ -54,5 +54,16 @@ New unit coverage: engine upgrade, failed checksum, interrupted engine file,
 YouTube host scoping, 403 client changes and bounded retries. The device test
 asserts the actual engine version, packaged EJS, and executes QuickJS locally.
 The cloud still cannot access the test video's YouTube endpoint, so an end-to-end
-successful download of that video remains unverified. Local Gradle still cannot
-run these tasks because the environment lacks JDK 17; CI uses JDK 17.
+successful download of that video remains unverified. The initial local run lacked JDK 17. After installing JDK 17 and the proxy CA,
+21 domain/downloader tests passed locally; the Android SDK was also provisioned
+for local full validation. CI independently uses JDK 17.
+
+
+Earlier Actions APK certificates differ (e8c49c4: 59df3573...119c3;
+4339408: 7985e7ac...d178d). The old signing key was not retained by the workflow,
+so a newly generated debug key cannot update that installation. CI now also
+provides a parallel ARM64 verification package, com.mediaharvester.android.enginefix,
+labeled MediaHarvester Engine Fix. It does not remove or read the original app's
+private data. Existing 174.7 MiB partial data remains in the original app and is
+not automatically migrated to the parallel package. Do not uninstall the original
+to work around signature conflicts when partial data needs to be retained.

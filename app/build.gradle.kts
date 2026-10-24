@@ -5,7 +5,7 @@ android {
  sourceSets.getByName("main").assets.srcDir(rootProject.file("licenses"))
  namespace = "com.mediaharvester.app"
  compileSdk = 35
- defaultConfig { minSdk = 29; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"; applicationId = "com.mediaharvester.android"; targetSdk = 35; versionCode = 1; versionName = "0.1.0"; ndk { abiFilters += (providers.gradleProperty("targetAbis").orNull?.split(",") ?: listOf("arm64-v8a", "x86_64")) } }
+ defaultConfig { minSdk = 29; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"; applicationId = "com.mediaharvester.android" + if(providers.gradleProperty("phonePreview").orNull=="true") ".enginefix" else ""; manifestPlaceholders["applicationLabel"] = if(providers.gradleProperty("phonePreview").orNull=="true") "MediaHarvester Engine Fix" else "MediaHarvester"; targetSdk = 35; versionCode = 1; versionName = "0.1.0"; ndk { abiFilters += (providers.gradleProperty("targetAbis").orNull?.split(",") ?: listOf("arm64-v8a", "x86_64")) } }
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
  kotlinOptions { jvmTarget = "17" }
  buildFeatures { compose = true }
