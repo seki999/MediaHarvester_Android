@@ -152,7 +152,7 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
    if(requireAudio) require(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO)=="yes") { "Merged audio missing" }
   } finally { retriever.release() }
  }
- suspend fun updateEngine(): String { initialize(); return EngineRuntime.update(context) }
- suspend fun engineVersion(): String { initialize();return execute(YoutubeDLRequest(emptyList()).apply {addOption("--version")},"version-check") }
+ suspend fun updateEngine(): String = withContext(Dispatchers.IO) { initialize(); EngineRuntime.update(context) }
+ suspend fun engineVersion(): String = withContext(Dispatchers.IO) { initialize();execute(YoutubeDLRequest(emptyList()).apply {addOption("--version")},"version-check") }
  fun cancel(id: String) { if (ready) YoutubeDL.destroyProcessById(id) }
 }
