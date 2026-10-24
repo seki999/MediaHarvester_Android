@@ -45,6 +45,25 @@ class CookieVault(private val context: Context) {
    parts.size==7 && (host==parts[0].trimStart('.') || parts[1]=="TRUE" && host.endsWith("."+parts[0].trimStart('.')))
   }.toList()
   require(lines.isNotEmpty()) { "No cookies match authorized website" }
+  store(lines,host)
+ }
+ // Same as desktop save_pasted_cookie(): accept a browser "Cookie:" request header for the authorized HTTPS site.
+ fun importHeader(header: String, authorizedUrl: String) {
+  val authorized=URI(Urls.validate(authorizedUrl));require(authorized.scheme=="https") { "Cookie authorization requires HTTPS" };val host=authorized.host.lowercase()
+  var text=header.trim(); if(text.lowercase().startsWith("cookie:")) text=text.substring(7).trim()
+  require(text.isNotEmpty() && text.length<=131072 && text.none { it.code<32 || it.code==127 }) { "Paste the complete single-line Cookie header" }
+  val pairs=text.split(';').filter { it.isNotBlank() }.map { part ->
+   val name=part.trim().substringBefore('=',""); val value=part.trim().substringAfter('=',"")
+   require(part.contains('=') && name.matches(Regex("[!#$%&'*+\\-.^_`|~0-9a-zA-Z]+")) && !name.startsWith("$")) { "Invalid Cookie format; copy the whole name=value; name=value line" }
+   name to value.trim()
+  }
+  require(pairs.isNotEmpty() && pairs.size<=200) { "Cookie is empty or has too many entries" }
+  // Instagram's authorized media API also uses i.instagram.com.
+  val domain=if(host=="instagram.com" || host.endsWith(".instagram.com")) ".instagram.com" else host
+  val sub=if(domain.startsWith(".")) "TRUE" else "FALSE"
+  store(pairs.map { (name,value) -> "$domain\t$sub\t/\tTRUE\t0\t$name\t$value" },host)
+ }
+ private fun store(lines: List<String>, host: String) {
   val cipher=Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.ENCRYPT_MODE,key())
   val data=("# Netscape HTTP Cookie File\n"+lines.joinToString("\n")+"\n").toByteArray()
   val temporary=File(file.path+".tmp"); temporary.writeBytes(cipher.iv+cipher.doFinal(data)); check(temporary.renameTo(file))

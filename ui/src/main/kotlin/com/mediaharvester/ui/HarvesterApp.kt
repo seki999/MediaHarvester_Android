@@ -161,6 +161,7 @@ private fun TaskCard(task: TaskEntity,action: (String)->Unit) {
 private fun SettingsScreen(model: HarvesterViewModel,prefs: Preferences,restart: ()->Unit) {
  val context=LocalContext.current
  var authorized by rememberSaveable { mutableStateOf("") }
+ var cookieHeader by remember { mutableStateOf("") }
  var cookieHost by remember { mutableStateOf(model.coordinator.cookies.host()) }
  var cookieError by remember { mutableStateOf("") }
  var engineVersion by remember { mutableStateOf("正在读取引擎版本…") }
@@ -199,6 +200,8 @@ private fun SettingsScreen(model: HarvesterViewModel,prefs: Preferences,restart:
   item { HorizontalDivider();Text(s(R.string.cookies),style=MaterialTheme.typography.titleMedium);Text(s(R.string.cookie_consent),style=MaterialTheme.typography.bodySmall) }
   item { OutlinedTextField(authorized,{authorized=it},label={Text(s(R.string.authorized_site))},modifier=Modifier.fillMaxWidth(),singleLine=true) }
   item { Text(cookieHost);if(cookieError.isNotEmpty()) Text(cookieError);Row { TextButton(onClick={cookies.launch(arrayOf("text/*","application/octet-stream"))},enabled=authorized.startsWith("https://")) {Text(s(R.string.import_cookies))};TextButton(onClick={model.coordinator.cookies.delete();cookieHost=""}) {Text(s(R.string.delete_cookies))} } }
+  item { OutlinedTextField(cookieHeader,{cookieHeader=it},label={Text(s(R.string.cookie_header))},modifier=Modifier.fillMaxWidth(),singleLine=true) }
+  item { TextButton(onClick={val header=cookieHeader;model.maintenance { model.coordinator.cookies.importHeader(header,authorized); cookieHost=model.coordinator.cookies.host(); cookieHeader="" }},enabled=authorized.startsWith("https://") && cookieHeader.isNotBlank()) {Text(s(R.string.apply_cookie_header))} }
   item { HorizontalDivider();Text(s(R.string.data),style=MaterialTheme.typography.titleMedium) }
   item { TextButton(onClick={model.maintenance {model.coordinator.clearHistory()}}) {Text(s(R.string.clear_history))} }
   item { TextButton(onClick={model.maintenance {model.coordinator.clearTemporary()}}) {Text(s(R.string.clear_temp))} }

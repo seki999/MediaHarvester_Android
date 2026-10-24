@@ -45,19 +45,32 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
      }
     } } finally { handle.dispose() }
    }
-   try { website(url,cookieFile) + images } catch (e: CancellationException) { throw e } catch (e: Exception) { if (images.isEmpty()) throw e else images }
+   try { website(url,cookieFile) + images } catch (e: CancellationException) { throw e } catch (e: Exception) { if (images.isEmpty() || loginError(e.message.orEmpty())) throw e else images }
    } finally { cookieFile?.delete() }
   }
  }
  private suspend fun website(url: String, cookieFile: File?): List<Media> {
   initialize()
-  val request = YoutubeDLRequest(url).apply { addOption("--dump-single-json"); addOption("--skip-download"); addOption("--no-warnings"); addOption("--playlist-end", "100"); addOption("--socket-timeout", "20"); addOption("--retries", "1"); cookieFile?.let { addOption("--cookies", it.absolutePath) } }
+  val request = YoutubeDLRequest(url).apply { addOption("--dump-single-json"); addOption("--skip-download"); addOption("--no-warnings"); addOption("--playlist-end", "100"); addOption("--socket-timeout", "20"); addOption("--retries", "1"); cookieFile?.let { addOption("--cookies", it.absolutePath) }; if (instagram(url)) addOption("--ignore-no-formats-error") }
   val id = UUID.randomUUID().toString()
   val json = execute(request, id)
   val root = JSONObject(json)
   val entries = root.optJSONArray("entries")
-  return if (entries != null) (0 until entries.length()).mapNotNull { entries.optJSONObject(it) }.filter { !it.optBoolean("has_drm") }.mapNotNull { parse(it, url) } else listOfNotNull(parse(root, url))
+  return if (entries != null) (0 until entries.length()).mapNotNull { entries.optJSONObject(it) }.filter { !it.optBoolean("has_drm") }.mapIndexedNotNull { i, entry -> parse(entry, url) ?: instagramImage(entry, root, url, i + 1) } else listOfNotNull(parse(root, url) ?: instagramImage(root, root, url, 1))
  }
+ // Desktop parity (instagram.py): photo posts/carousel photos have no formats; keep the largest thumbnail as an image.
+ private fun instagram(url: String) = URI(url).host.orEmpty().lowercase().let { it == "instagram.com" || it == "www.instagram.com" }
+ private fun instagramImage(entry: JSONObject, root: JSONObject, url: String, index: Int): Media? {
+  if (!instagram(url) || (entry.optJSONArray("formats")?.length() ?: 0) > 0) return null
+  val thumbnails = entry.optJSONArray("thumbnails") ?: return null
+  val best = (0 until thumbnails.length()).mapNotNull { thumbnails.optJSONObject(it) }.filter { it.optString("url").startsWith("https://") }
+   .maxByOrNull { it.optLong("width") * it.optLong("height") } ?: return null
+  val image = runCatching { Urls.validate(best.optString("url")) }.getOrNull() ?: return null
+  val id = entry.optString("id").ifEmpty { root.optString("id") }
+  return Media(image, "Instagram_${id}_${index.toString().padStart(2, '0')}", "image/jpeg", image, best.optInt("width"), best.optInt("height"))
+ }
+ // Same keywords as desktop browser_cookies.login_error(): a login failure must surface even when page images were found.
+ private fun loginError(message: String) = message.lowercase().let { m -> listOf("login required","login_required","log in","logged-in","sign in","registered users","requires authentication","cookies for the authentication").any { it in m } }
  private fun parse(json: JSONObject, fallback: String): Media? {
   if (json.optBoolean("has_drm") || json.optBoolean("is_live")) return null
   val formats = json.optJSONArray("formats") ?: return null

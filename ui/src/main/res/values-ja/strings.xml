@@ -35,6 +35,8 @@
 <string name="authorized_site">許可するサイト（https://…）</string>
 <string name="import_cookies">許可してインポート</string>
 <string name="delete_cookies">Cookieを削除</string>
+<string name="cookie_header">Cookie リクエストヘッダー（name=value; …）</string>
+<string name="apply_cookie_header">許可してヘッダーを適用</string>
 <string name="data">ローカルデータ</string>
 <string name="clear_history">履歴を削除（ファイルは保持）</string>
 <string name="clear_temp">一時データを削除（先に一時停止）</string>

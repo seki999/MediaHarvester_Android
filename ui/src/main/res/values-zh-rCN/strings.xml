@@ -35,6 +35,8 @@
 <string name="authorized_site">授权网站（https://…）</string>
 <string name="import_cookies">授权并导入</string>
 <string name="delete_cookies">删除 Cookies</string>
+<string name="cookie_header">Cookie 请求头（name=value; …）</string>
+<string name="apply_cookie_header">授权并应用请求头</string>
 <string name="data">本地数据</string>
 <string name="clear_history">清除历史（保留文件）</string>
 <string name="clear_temp">清除临时数据（先暂停任务）</string>

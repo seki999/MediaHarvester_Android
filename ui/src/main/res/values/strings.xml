@@ -35,6 +35,8 @@
 <string name="authorized_site">Authorized website (https://…)</string>
 <string name="import_cookies">Authorize and import</string>
 <string name="delete_cookies">Delete cookies</string>
+<string name="cookie_header">Cookie request header (name=value; …)</string>
+<string name="apply_cookie_header">Authorize and apply header</string>
 <string name="data">Local data</string>
 <string name="clear_history">Clear history (keep files)</string>
 <string name="clear_temp">Clear temporary data (pause first)</string>
