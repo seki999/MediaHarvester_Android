@@ -73,6 +73,20 @@ class IntegrationTest {
   assertEquals(tasks[0].outputUri,tasks[1].outputUri);assertNotEquals(tasks[0].outputUri,tasks[2].outputUri)
   tasks.forEach {assertTrue(coordinator.publisher.verify(Uri.parse(it.outputUri),it.digest))}
  }
+ @Test fun repeatedDownloadReusesPausedTaskAndRetainedBytes(): Unit=runBlocking {
+  val media=Media(server.url("/resume.wav").toString(),"resume.wav","audio/wav")
+  coordinator.enqueue(media,null,"")
+  val id=coordinator.dao.all().last().id
+  val part=File(context.filesDir,"tasks/$id/payload.part").apply { parentFile!!.mkdirs();writeText("retained data") }
+  coordinator.dao.progress(id,13,100,0)
+  coordinator.action(id,"pause")
+  coordinator.enqueue(media,null,"")
+  assertEquals("QUEUED",coordinator.dao.get(id)!!.state)
+  assertEquals(1,coordinator.dao.all().count { it.url==media.url })
+  assertEquals("retained data",part.readText())
+  coordinator.action(id,"cancel")
+  assertFalse(part.exists())
+ }
  @Test fun corruptImageCannotComplete(): Unit=runBlocking {
   server.enqueue(MockResponse().setBody("not an image").setHeader("Content-Type","image/png"))
   coordinator.enqueue(Media(server.url("/bad.png").toString(),"bad.png","image/png"),null,"")
@@ -106,6 +120,9 @@ class IntegrationTest {
   ff.merge(video,audio,merged);coordinator.extractor.verify(merged)
   val retriever=MediaMetadataRetriever();try {retriever.setDataSource(merged.path);assertEquals("yes",retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO))}finally{retriever.release()}
   assertTrue(merged.length()>0)
+  ff.run(listOf("-xerror","-err_detect","explode","-i",merged.path,"-map","0:v?","-map","0:a?","-f","null","-"))
+  val damaged=File(root,"damaged.mp4").apply { writeBytes(merged.readBytes().copyOf(64)) }
+  assertTrue(runCatching { ff.run(listOf("-xerror","-err_detect","explode","-i",damaged.path,"-f","null","-")) }.isFailure)
   for(format in listOf("mp3","m4a","opus")) {
    val converted=File(root,"converted.$format");ff.convert(merged,converted,format);coordinator.extractor.verify(converted,true)
   }
