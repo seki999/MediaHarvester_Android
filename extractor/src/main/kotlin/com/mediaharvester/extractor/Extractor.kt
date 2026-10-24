@@ -100,7 +100,7 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
   } + "|" + conversion
   val fragmented = streams.any { it.optString("protocol").contains("m3u8") || it.optString("protocol").contains("dash") || it.has("fragments") }
   val invalidJournal = directory.listFiles().orEmpty().filter { it.extension == "ytdl" }.any {
-   runCatching { JSONObject(it.readText()).getJSONObject("downloader").getInt("current_fragment") >= 0 }.getOrDefault(false).not()
+   runCatching { JSONObject(it.readText()).getJSONObject("downloader").getJSONObject("current_fragment").getInt("index") >= 0 }.getOrDefault(false).not()
   }
   // Without an explicit fragment list, cross-session equivalence cannot be proven.
   val safeIdentity = identity + if(invalidJournal || fragmented && streams.any { !it.has("fragments") }) UUID.randomUUID().toString() else ""
