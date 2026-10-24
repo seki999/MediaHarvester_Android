@@ -96,7 +96,7 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
   val streams = if(selected == null) listOf(info) else (0 until selected.length()).map { selected.getJSONObject(it) }
   val identity = streams.joinToString("\n") { f ->
    listOf(info.optString("id"), f.optString("format_id"), f.optString("vcodec"), f.optString("acodec"), f.optString("filesize"),
-    f.optString("protocol"), f.optJSONArray("fragments")?.toString() ?: "").joinToString("|")
+    f.optString("protocol"), f.optString("manifest_url"), f.optString("fragment_base_url"), f.optJSONArray("fragments")?.toString() ?: "").joinToString("|")
   } + "|" + conversion
   val fragmented = streams.any { it.optString("protocol").contains("m3u8") || it.optString("protocol").contains("dash") || it.has("fragments") }
   val invalidJournal = directory.listFiles().orEmpty().filter { it.extension == "ytdl" }.any {
