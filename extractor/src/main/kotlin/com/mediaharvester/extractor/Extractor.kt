@@ -18,6 +18,10 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
  private val initLock = Any()
  @Volatile private var ready = false
  fun initialize() { require(android.system.Os.sysconf(android.system.OsConstants._SC_PAGESIZE)<=4096) { "Bundled media runtime requires 4 KiB pages; direct HTTP and static images remain available" }; if (!ready) synchronized(initLock) { if (!ready) { YoutubeDL.init(context); FFmpeg.init(context); ready = true } } }
+ @Volatile private var engineUpdated = false
+ // The yt-dlp bundled in the AAR is frozen at library release time; site extractors go stale quickly.
+ // Like the desktop version (yt-dlp>=2026.8.19), fetch the latest stable release once per process. Failure is non-fatal.
+ private fun updateEngine() { if (!engineUpdated) synchronized(initLock) { if (!engineUpdated) { engineUpdated = true; runCatching { YoutubeDL.updateYoutubeDL(context, YoutubeDL.UpdateChannel.STABLE) } } } }
  @OptIn(InternalCoroutinesApi::class)
  override suspend fun extract(url: String): List<Media> = withTimeout(90_000) {
   withContext(Dispatchers.IO) {
@@ -49,7 +53,7 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
   }
  }
  private suspend fun website(url: String, cookieFile: File?): List<Media> {
-  initialize()
+  initialize(); updateEngine()
   val request = YoutubeDLRequest(url).apply { addOption("--dump-single-json"); addOption("--skip-download"); addOption("--no-warnings"); addOption("--playlist-end", "100"); addOption("--socket-timeout", "20"); addOption("--retries", "1"); cookieFile?.let { addOption("--cookies", it.absolutePath) } }
   val id = UUID.randomUUID().toString()
   val json = execute(request, id)
@@ -61,16 +65,30 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
   if (json.optBoolean("has_drm") || json.optBoolean("is_live")) return null
   val formats = json.optJSONArray("formats") ?: return null
   val raw = (0 until formats.length()).mapNotNull { formats.optJSONObject(it) }.filter { !it.optBoolean("has_drm") }
-  val audio = raw.filter { it.optString("vcodec", "none") == "none" && it.optString("acodec", "none") != "none" }.maxByOrNull { it.optDouble("abr", 0.0) }
+  // Same rules as desktop format_options(): a missing/null codec means "unknown", not "no stream".
+  // Unknown-track formats (common for generic/embedded sites) are kept as original formats instead of being dropped.
+  fun codec(f: JSONObject, key: String) = if (f.isNull(key)) null else f.optString(key)
+  val audios = raw.filter { codec(it, "vcodec") == "none" && codec(it, "acodec").let { a -> a != null && a != "none" } }
   val options = raw.mapNotNull { f ->
-   val hasVideo = f.optString("vcodec", "none") != "none"
-   val hasAudio = f.optString("acodec", "none") != "none"
-   if (!hasVideo && !hasAudio || hasVideo && !hasAudio && audio == null) return@mapNotNull null
    val id = f.optString("format_id")
-   if (!id.matches(Regex("[a-zA-Z0-9_.-]+"))) return@mapNotNull null
-   val selector = if (hasVideo && !hasAudio) "$id+${audio!!.optString("format_id")}" else id
+   // Reject only characters that have meaning in a yt-dlp -f selector.
+   if (!id.matches(Regex("[^\\s/+,\\[\\]()*]+"))) return@mapNotNull null
+   val hasVideo = codec(f, "vcodec").let { it != null && it != "none" }
+   val hasAudio = codec(f, "acodec").let { it != null && it != "none" }
+   val ext = f.optString("ext")
+   val selector = if (hasVideo && !hasAudio) {
+    val pool = audios.filter { it.optString("ext") == (if (ext == "mp4") "m4a" else "webm") }.ifEmpty { audios }
+    val best = pool.maxByOrNull { if (it.isNull("abr")) it.optDouble("tbr", 0.0) else it.optDouble("abr", 0.0) } ?: return@mapNotNull null
+    "$id+${best.optString("format_id")}"
+   } else id
    val height = f.optInt("height")
-   Format(selector, if (hasVideo) "${height.takeIf { it > 0 }?.toString()?.plus("p") ?: f.optString("resolution", "video")}  ·  ${f.optString("ext")}  ·  $id" else "Audio  ·  ${f.optString("ext")}  ·  $id", f.optString("ext"), f.optLong("filesize", f.optLong("filesize_approx")), height, !hasVideo)
+   val audioOnly = !hasVideo && hasAudio && codec(f, "vcodec") == "none"
+   val label = when {
+    hasVideo || height > 0 -> "${height.takeIf { it > 0 }?.toString()?.plus("p") ?: f.optString("resolution", "video")}  ·  $ext  ·  $id"
+    audioOnly -> "Audio  ·  $ext  ·  $id"
+    else -> "Original  ·  $ext  ·  $id"
+   }
+   Format(selector, label, ext, f.optLong("filesize", f.optLong("filesize_approx")), height, audioOnly)
   }.sortedWith(compareByDescending<Format> { it.height }.thenByDescending { it.size })
   if (options.isEmpty()) return null
   return Media(json.optString("webpage_url", fallback), json.optString("title", "media"), "video/mp4", json.optString("thumbnail"), duration = json.optDouble("duration", 0.0), formats = options, website = true)
@@ -81,7 +99,7 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
   try { currentCoroutineContext().ensureActive(); YoutubeDL.execute(request, id, progress).out } finally { handle.dispose() }
  }
  suspend fun download(url: String, selector: String, conversion: String, directory: File, id: String, rate: Long, audioOnly: Boolean = false, progress: (Float, Long, String) -> Unit): File {
-  initialize(); directory.mkdirs()
+  initialize(); updateEngine(); directory.mkdirs()
   // Cross-session fragmented streams are always restarted; URL signatures and fragments are not durable validators.
   directory.listFiles()?.forEach { it.deleteRecursively() }
   val cookieFile=cookies(url)
