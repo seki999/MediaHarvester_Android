@@ -146,7 +146,7 @@ class IntegrationTest {
   assertFalse(File(context.noBackupFilesDir,"cookies.enc").readBytes().toString(Charsets.UTF_8).contains("TEST_SECRET_123"))
   coordinator.cookies.delete();assertNull(coordinator.cookies.export("https://www.example.org/"));file.delete();Unit
  }
- @Test fun notificationServiceActionsPauseAndCancelTasks(): Unit=runBlocking {
+ @Test fun notificationPausePreservesDataAndConfirmedCancellationDeletesIt(): Unit=runBlocking {
   server.enqueue(MockResponse().setHeader("Content-Type","audio/wav").setBody(Buffer().write(wav(20))).throttleBody(1024,100,TimeUnit.MILLISECONDS))
   coordinator.enqueue(Media(server.url("/pause.wav").toString(),"pause.wav","audio/wav"),null,"")
   val id=coordinator.dao.all().last().id
@@ -161,7 +161,9 @@ class IntegrationTest {
    coordinator.enqueue(Media(server.url("/cancel.wav").toString(),"cancel.wav","audio/wav"),null,"")
    val other=coordinator.dao.all().last().id
    scenario.onActivity {it.startForegroundService(Intent(it,DownloadService::class.java))};delay(700)
-   scenario.onActivity {it.startService(Intent(it,DownloadService::class.java).setAction("cancel"))}
+   // Destructive cancellation is invoked only after UI confirmation.
+   coordinator.action(other,"cancel")
+   assertFalse(File(context.filesDir,"tasks/$other").exists())
    withTimeout(10000){while(coordinator.dao.get(other)!!.state!="CANCELLED") delay(100)}
    assertTrue(coordinator.dao.get(other)!!.outputUri.isEmpty())
   }finally{scenario.close()}
