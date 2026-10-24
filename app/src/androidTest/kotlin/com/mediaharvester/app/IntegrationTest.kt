@@ -73,6 +73,20 @@ class IntegrationTest {
   assertEquals(tasks[0].outputUri,tasks[1].outputUri);assertNotEquals(tasks[0].outputUri,tasks[2].outputUri)
   tasks.forEach {assertTrue(coordinator.publisher.verify(Uri.parse(it.outputUri),it.digest))}
  }
+ @Test fun repeatedDownloadReusesPausedTaskAndRetainedBytes(): Unit=runBlocking {
+  val media=Media(server.url("/resume.wav").toString(),"resume.wav","audio/wav")
+  coordinator.enqueue(media,null,"")
+  val id=coordinator.dao.all().last().id
+  val part=File(context.filesDir,"tasks/$id/payload.part").apply { parentFile!!.mkdirs();writeText("retained data") }
+  coordinator.dao.progress(id,13,100,0)
+  coordinator.action(id,"pause")
+  coordinator.enqueue(media,null,"")
+  assertEquals("QUEUED",coordinator.dao.get(id)!!.state)
+  assertEquals(1,coordinator.dao.all().count { it.url==media.url })
+  assertEquals("retained data",part.readText())
+  coordinator.action(id,"cancel")
+  assertFalse(part.exists())
+ }
  @Test fun corruptImageCannotComplete(): Unit=runBlocking {
   server.enqueue(MockResponse().setBody("not an image").setHeader("Content-Type","image/png"))
   coordinator.enqueue(Media(server.url("/bad.png").toString(),"bad.png","image/png"),null,"")
@@ -106,6 +120,9 @@ class IntegrationTest {
   ff.merge(video,audio,merged);coordinator.extractor.verify(merged)
   val retriever=MediaMetadataRetriever();try {retriever.setDataSource(merged.path);assertEquals("yes",retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO))}finally{retriever.release()}
   assertTrue(merged.length()>0)
+  ff.run(listOf("-xerror","-err_detect","explode","-i",merged.path,"-map","0:v?","-map","0:a?","-f","null","-"))
+  val damaged=File(root,"damaged.mp4").apply { writeBytes(merged.readBytes().copyOf(64)) }
+  assertTrue(runCatching { ff.run(listOf("-xerror","-err_detect","explode","-i",damaged.path,"-f","null","-")) }.isFailure)
   for(format in listOf("mp3","m4a","opus")) {
    val converted=File(root,"converted.$format");ff.convert(merged,converted,format);coordinator.extractor.verify(converted,true)
   }
@@ -113,6 +130,21 @@ class IntegrationTest {
  }
  @Test fun nativeYtdlpParsesActualDashFormatsAndMergesSelectedTracks(): Unit=runBlocking {
   coordinator.extractor.initialize()
+  assertEquals("2026.10.21",coordinator.extractor.engineVersion().trim())
+  val engine=File(context.noBackupFilesDir,"youtubedl-android/yt-dlp/yt-dlp")
+  // Official zipapps start with a shebang. Android's strict ZipFile rejects
+  // that executable prefix, while Python supports it; inspect the ZIP stream.
+  val engineBytes=engine.readBytes()
+  val zipOffset=engineBytes.indexOf(10.toByte())+1
+  assertTrue(zipOffset in 1..256)
+  java.util.zip.ZipInputStream(engineBytes.inputStream(zipOffset,engineBytes.size-zipOffset)).use { zip ->
+   assertTrue(generateSequence { zip.nextEntry }.any { it.name=="yt_dlp_ejs/yt/solver/core.min.js" })
+  }
+  val quickjs=File(context.applicationInfo.nativeLibraryDir,"libqjs.so")
+  assertTrue(quickjs.isFile)
+  val js=ProcessBuilder(quickjs.path,"-e","console.log((1n + 2n).toString())").redirectErrorStream(true).start()
+  val jsOutput=js.inputStream.bufferedReader().use { it.readText() }
+  assertEquals(jsOutput,0,js.waitFor());assertEquals("3",jsOutput.trim())
   val root=File(context.cacheDir,"dash-test").apply{mkdirs()}
   val ff=FfmpegRunner(context)
   File(context.filesDir,"native-build.txt").writeText("yt-dlp: "+coordinator.extractor.engineVersion()+"\n"+ff.run(listOf("-version"))+"\n"+ff.run(listOf("-buildconf")))
@@ -146,7 +178,7 @@ class IntegrationTest {
   assertFalse(File(context.noBackupFilesDir,"cookies.enc").readBytes().toString(Charsets.UTF_8).contains("TEST_SECRET_123"))
   coordinator.cookies.delete();assertNull(coordinator.cookies.export("https://www.example.org/"));file.delete();Unit
  }
- @Test fun notificationServiceActionsPauseAndCancelTasks(): Unit=runBlocking {
+ @Test fun notificationPausePreservesDataAndConfirmedCancellationDeletesIt(): Unit=runBlocking {
   server.enqueue(MockResponse().setHeader("Content-Type","audio/wav").setBody(Buffer().write(wav(20))).throttleBody(1024,100,TimeUnit.MILLISECONDS))
   coordinator.enqueue(Media(server.url("/pause.wav").toString(),"pause.wav","audio/wav"),null,"")
   val id=coordinator.dao.all().last().id
@@ -161,7 +193,9 @@ class IntegrationTest {
    coordinator.enqueue(Media(server.url("/cancel.wav").toString(),"cancel.wav","audio/wav"),null,"")
    val other=coordinator.dao.all().last().id
    scenario.onActivity {it.startForegroundService(Intent(it,DownloadService::class.java))};delay(700)
-   scenario.onActivity {it.startService(Intent(it,DownloadService::class.java).setAction("cancel"))}
+   // Destructive cancellation is invoked only after UI confirmation.
+   coordinator.action(other,"cancel")
+   assertFalse(File(context.filesDir,"tasks/$other").exists())
    withTimeout(10000){while(coordinator.dao.get(other)!!.state!="CANCELLED") delay(100)}
    assertTrue(coordinator.dao.get(other)!!.outputUri.isEmpty())
   }finally{scenario.close()}

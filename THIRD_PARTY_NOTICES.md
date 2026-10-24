@@ -34,3 +34,10 @@ FFmpeg配置包含x264/x265、WebP、AV1、GnuTLS、字体及其他共享库，P
 
 没有包含Windows Qt/PySide/PyInstaller、aria2或Playwright。
 不以原Windows第三方清单冒充Android依赖清单。
+
+## Bundled yt-dlp engine update
+
+The Android APK includes the official yt-dlp 2026.10.21 zipapp (Unlicense),
+including yt-dlp-ejs (Unlicense), astring (MIT) and meriyah (ISC).
+Provenance and SHA-256 are in extractor/src/main/assets/engine/PROVENANCE.txt.
+Upstream source: https://github.com/yt-dlp/yt-dlp/releases/tag/2026.10.21

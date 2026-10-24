@@ -3,6 +3,9 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+concurrency:
+  group: android-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -39,6 +42,22 @@ jobs:
         if: success()
         with:
           name: MediaHarvester-Android-Debug-APK
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+      - name: Build ARM64 phone APK for Drive delivery
+        run: ./gradlew :app:assembleDebug -PtargetAbis=arm64-v8a --console=plain
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: MediaHarvester-Android-ARM64-Debug-APK
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+      - name: Build parallel ARM64 engine verification APK
+        run: ./gradlew :app:assembleDebug -PtargetAbis=arm64-v8a -PphonePreview=true --console=plain
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: MediaHarvester-Android-ARM64-EngineFix-Preview-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
       - uses: actions/upload-artifact@v4

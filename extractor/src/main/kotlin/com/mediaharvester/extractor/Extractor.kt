@@ -13,15 +13,12 @@ import org.json.JSONObject
 import java.io.File
 import java.net.URI
 import java.util.UUID
+import kotlin.concurrent.read
 
 class Extractor(private val context: Context, private val cookies: (String) -> File?, private val client: OkHttpClient = PublicNetwork.client()): MediaExtractor {
  private val initLock = Any()
  @Volatile private var ready = false
- fun initialize() { require(android.system.Os.sysconf(android.system.OsConstants._SC_PAGESIZE)<=4096) { "Bundled media runtime requires 4 KiB pages; direct HTTP and static images remain available" }; if (!ready) synchronized(initLock) { if (!ready) { YoutubeDL.init(context); FFmpeg.init(context); ready = true } } }
- @Volatile private var engineUpdated = false
- // The yt-dlp bundled in the AAR is frozen at library release time; site extractors go stale quickly.
- // Like the desktop version (yt-dlp>=2026.8.19), fetch the latest stable release once per process. Failure is non-fatal.
- private fun updateEngine() { if (!engineUpdated) synchronized(initLock) { if (!engineUpdated) { engineUpdated = true; runCatching { YoutubeDL.updateYoutubeDL(context, YoutubeDL.UpdateChannel.STABLE) } } } }
+ fun initialize() { require(android.system.Os.sysconf(android.system.OsConstants._SC_PAGESIZE)<=4096) { "Bundled media runtime requires 4 KiB pages; direct HTTP and static images remain available" }; if (!ready) synchronized(initLock) { if (!ready) { YoutubeDL.init(context); FFmpeg.init(context); EngineRuntime.initialize(context); ready = true } } }
  @OptIn(InternalCoroutinesApi::class)
  override suspend fun extract(url: String): List<Media> = withTimeout(90_000) {
   withContext(Dispatchers.IO) {
@@ -53,7 +50,7 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
   }
  }
  private suspend fun website(url: String, cookieFile: File?): List<Media> {
-  initialize(); updateEngine()
+  initialize()
   val request = YoutubeDLRequest(url).apply { addOption("--dump-single-json"); addOption("--skip-download"); addOption("--no-warnings"); addOption("--playlist-end", "100"); addOption("--socket-timeout", "20"); addOption("--retries", "1"); cookieFile?.let { addOption("--cookies", it.absolutePath) } }
   val id = UUID.randomUUID().toString()
   val json = execute(request, id)
@@ -96,27 +93,67 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
  @OptIn(InternalCoroutinesApi::class)
  suspend fun execute(request: YoutubeDLRequest, id: String, progress: (Float, Long, String) -> Unit = { _,_,_ -> }): String = withContext(Dispatchers.IO) {
   val handle = currentCoroutineContext().job.invokeOnCompletion(onCancelling = true, invokeImmediately = true) { if (it != null) YoutubeDL.destroyProcessById(id) }
-  try { currentCoroutineContext().ensureActive(); YoutubeDL.execute(request, id, progress).out } finally { handle.dispose() }
+  val coroutine=currentCoroutineContext()
+  try { coroutine.ensureActive(); EngineRuntime.lock.read { coroutine.ensureActive(); YoutubeDL.execute(request, id, progress).out } } finally { handle.dispose() }
  }
- suspend fun download(url: String, selector: String, conversion: String, directory: File, id: String, rate: Long, audioOnly: Boolean = false, progress: (Float, Long, String) -> Unit): File {
-  initialize(); updateEngine(); directory.mkdirs()
-  // Cross-session fragmented streams are always restarted; URL signatures and fragments are not durable validators.
-  directory.listFiles()?.forEach { it.deleteRecursively() }
+ suspend fun download(url: String, selector: String, conversion: String, directory: File, id: String, rate: Long, audioOnly: Boolean = false, attempt: Int = 0, requestedHeight: Int = 0, progress: (Float, Long, String) -> Unit): File {
+  initialize(); directory.mkdirs()
   val cookieFile=cookies(url)
+  var desiredHeight=requestedHeight
   try {
+  // Resolve fresh signed URLs on every attempt. Only reuse fragment journals for an
+  // identical selected manifest; changed signatures conservatively isolate old bytes.
+  val youtubeClient=if(YoutubePolicy.isYoutube(url)) YoutubePolicy.client(attempt,cookieFile!=null) else null
+  val selection=when {
+   attempt==0 -> selector
+   audioOnly -> "$selector/ba"
+   desiredHeight>0 -> "$selector/bv*[height=$desiredHeight]+ba/b[height=$desiredHeight]"
+   else -> selector
+  }
+  val probe = YoutubeDLRequest(url).apply {
+   youtubeClient?.let { addOption("--extractor-args", "youtube:player_client=$it") }
+   addOption("--dump-single-json"); addOption("--skip-download"); addOption("--no-playlist")
+   addOption("-f", selection); addOption("--socket-timeout", "30")
+   cookieFile?.let { addOption("--cookies", it.absolutePath) }
+  }
+  val info = JSONObject(execute(probe, id))
+  val selected = info.optJSONArray("requested_formats")
+  val streams = if(selected == null) listOf(info) else (0 until selected.length()).map { selected.getJSONObject(it) }
+  if(desiredHeight==0) desiredHeight=streams.maxOfOrNull { it.optInt("height",0) } ?: 0
+  val identity = streams.joinToString("\n") { f ->
+   listOf(info.optString("id"), f.optString("format_id"), f.optString("vcodec"), f.optString("acodec"), f.optString("filesize"),
+    f.optString("protocol"), f.optString("manifest_url"), f.optString("fragment_base_url"), f.optJSONArray("fragments")?.toString() ?: "").joinToString("|")
+  } + "|" + conversion
+  val fragmented = streams.any { it.optString("protocol").contains("m3u8") || it.optString("protocol").contains("dash") || it.has("fragments") }
+  val invalidJournal = directory.listFiles().orEmpty().filter { it.extension == "ytdl" }.any {
+   runCatching { JSONObject(it.readText()).getJSONObject("downloader").getJSONObject("current_fragment").getInt("index") >= 0 }.getOrDefault(false).not()
+  }
+  // Without an explicit fragment list, cross-session equivalence cannot be proven.
+  val safeIdentity = identity + if(invalidJournal || fragmented && streams.any { !it.has("fragments") }) UUID.randomUUID().toString() else ""
+  ResumeGuard.prepare(directory, safeIdentity)
   val request = YoutubeDLRequest(url).apply {
-   addOption("--newline"); addOption("--progress-template", "download:MH_PROGRESS %(progress)j"); addOption("--no-playlist"); addOption("--no-continue"); addOption("--no-mtime"); addOption("--socket-timeout", "20"); addOption("--retries", "2")
-   addOption("-f", selector); addOption("--merge-output-format", "mp4/mkv"); addOption("-o", File(directory, "media.%(ext)s").absolutePath)
+   youtubeClient?.let { addOption("--extractor-args", "youtube:player_client=$it") }
+   if(YoutubePolicy.isYoutube(url)) addOption("--http-chunk-size", "10M")
+   addOption("--newline"); addOption("--progress-template", "download:MH_PROGRESS %(progress)j"); addOption("--no-playlist"); addOption("--continue"); addOption("--part"); addOption("--abort-on-unavailable-fragments"); addOption("--fragment-retries", "10"); addOption("--extractor-retries", "3"); addOption("--retry-sleep", "http:exp=1:30"); addOption("--retry-sleep", "fragment:exp=1:30"); addOption("--no-mtime"); addOption("--socket-timeout", "30"); addOption("--retries", "10")
+   addOption("-f", selection); addOption("--merge-output-format", "mp4/mkv"); addOption("-o", File(directory, "media.%(ext)s").absolutePath)
    if (conversion.isNotEmpty()) { addOption("-x"); addOption("--audio-format", conversion) }
    if (rate > 0) addOption("--limit-rate", rate.toString())
    cookieFile?.let { addOption("--cookies", it.absolutePath) }
   }
   execute(request, id, progress)
   currentCoroutineContext().ensureActive()
-  val output = directory.listFiles()?.filter { it.isFile && it.extension !in listOf("part", "ytdl", "json", "temp") }?.singleOrNull() ?: error("Missing merged output")
+  val output = directory.listFiles()?.filter { it.isFile && !it.name.startsWith(".") && !it.name.contains("Frag") && it.extension !in listOf("part", "ytdl", "json", "temp") }?.singleOrNull() ?: error("Missing merged output")
   val audioOutput=audioOnly || conversion.isNotEmpty() || !selector.contains('+') && output.extension in listOf("m4a","mp3","opus","ogg","wav")
   verify(output,audioOutput,!audioOutput)
   return output
+  } catch(e: CancellationException) { throw e }
+  catch(e: Exception) {
+   val message=e.message.orEmpty()
+   if(YoutubePolicy.retry(message,attempt)) {
+    delay(2_000L shl attempt)
+    return download(url,selector,conversion,directory,id,rate,audioOnly,attempt+1,desiredHeight,progress)
+   }
+   throw e
   } finally { cookieFile?.delete() }
  }
  fun verify(file: File, audio: Boolean = false, requireAudio: Boolean = false) {
@@ -129,6 +166,7 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
    if(requireAudio) require(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO)=="yes") { "Merged audio missing" }
   } finally { retriever.release() }
  }
- suspend fun engineVersion(): String { initialize();return execute(YoutubeDLRequest(emptyList()).apply {addOption("--version")},"version-check") }
+ suspend fun updateEngine(): String = withContext(Dispatchers.IO) { initialize(); EngineRuntime.update(context) }
+ suspend fun engineVersion(): String = withContext(Dispatchers.IO) { initialize();execute(YoutubeDLRequest(emptyList()).apply {addOption("--version")},"version-check") }
  fun cancel(id: String) { if (ready) YoutubeDL.destroyProcessById(id) }
 }

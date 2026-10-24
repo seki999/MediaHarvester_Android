@@ -31,9 +31,9 @@ interface TaskDao {
  @Query("UPDATE tasks SET outputUri='',digest='' WHERE id=:id AND state!='COMPLETED'") suspend fun clearOutput(id: String)
  @Query("UPDATE tasks SET bytes=:bytes,total=:total,speed=:speed WHERE id=:id AND state='DOWNLOADING'") suspend fun progress(id: String, bytes: Long, total: Long, speed: Long)
  @Query("UPDATE tasks SET etag=:etag,total=:total WHERE id=:id") suspend fun metadata(id: String, etag: String, total: Long)
- @Query("UPDATE tasks SET state='PAUSED',speed=0 WHERE state IN ('QUEUED','DOWNLOADING','MERGING','VERIFYING','WAITING_NETWORK')") suspend fun recover()
+ @Query("UPDATE tasks SET state='PAUSED',speed=0,error='应用或服务中断；数据已保留，点击继续恢复下载' WHERE state IN ('QUEUED','DOWNLOADING','MERGING','VERIFYING','WAITING_NETWORK')") suspend fun recover()
  @Query("SELECT * FROM tasks WHERE digest=:digest AND state='COMPLETED' LIMIT 1") suspend fun duplicate(digest: String): TaskEntity?
- @Query("DELETE FROM tasks WHERE state IN ('COMPLETED','FAILED','CANCELLED')") suspend fun clearHistory()
+ @Query("DELETE FROM tasks WHERE state IN ('COMPLETED','CANCELLED')") suspend fun clearHistory()
  @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun recent(item: RecentEntity)
  @Query("SELECT * FROM recent ORDER BY time DESC LIMIT 10") fun recent(): Flow<List<RecentEntity>>
  @Query("DELETE FROM recent") suspend fun clearRecent()

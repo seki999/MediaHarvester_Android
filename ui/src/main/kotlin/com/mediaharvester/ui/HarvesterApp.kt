@@ -132,6 +132,8 @@ private fun VideoCard(media: Media,prefs: Preferences,download: (Format?,String)
 @Composable
 private fun TaskCard(task: TaskEntity,action: (String)->Unit) {
  val context=LocalContext.current
+ var confirmDelete by remember { mutableStateOf(false) }
+ if(confirmDelete) AlertDialog(onDismissRequest={confirmDelete=false},title={Text("取消并删除下载数据？")},text={Text("暂停会保留下载进度。删除后无法恢复，需要重新下载。")},confirmButton={TextButton(onClick={confirmDelete=false;action("cancel")}) {Text("删除数据")}},dismissButton={TextButton(onClick={confirmDelete=false}) {Text("保留")}})
  val terminal=task.state in listOf("COMPLETED","CANCELLED")
  Card {
   Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -145,7 +147,7 @@ private fun TaskCard(task: TaskEntity,action: (String)->Unit) {
     if(!terminal) {
      if(task.state in listOf("PAUSED","WAITING_NETWORK","FAILED")) TextButton(onClick={action(if(task.state=="FAILED") "retry" else "resume")}) {Text(s(if(task.state=="FAILED") R.string.retry else R.string.resume))}
      else TextButton(onClick={action("pause")}) {Text(s(R.string.pause))}
-     TextButton(onClick={action("cancel")}) {Text(s(R.string.cancel))}
+     TextButton(onClick={confirmDelete=true}) {Text("取消并删除数据")}
     }
     if(task.state=="COMPLETED") {
      TextButton(onClick={runCatching { context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(task.outputUri),task.mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }}) {Text(s(R.string.open))}
@@ -161,6 +163,9 @@ private fun SettingsScreen(model: HarvesterViewModel,prefs: Preferences,restart:
  var authorized by rememberSaveable { mutableStateOf("") }
  var cookieHost by remember { mutableStateOf(model.coordinator.cookies.host()) }
  var cookieError by remember { mutableStateOf("") }
+ var engineVersion by remember { mutableStateOf("正在读取引擎版本…") }
+ var engineUpdating by remember { mutableStateOf(false) }
+ LaunchedEffect(Unit) { engineVersion=runCatching { model.coordinator.engineVersion().trim() }.getOrElse { "无法读取引擎版本：${it.javaClass.simpleName}" } }
  val folder=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
   if(uri!=null) runCatching { context.contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION); model.setting(prefs.copy(directory=uri.toString())) }.onFailure { cookieError=it.message.orEmpty() }
  }
@@ -168,6 +173,19 @@ private fun SettingsScreen(model: HarvesterViewModel,prefs: Preferences,restart:
   if(uri!=null) model.maintenance { model.coordinator.cookies.import(uri,authorized); cookieHost=model.coordinator.cookies.host() }
  }
  LazyColumn(verticalArrangement=Arrangement.spacedBy(12.dp),contentPadding=PaddingValues(vertical=12.dp)) {
+  item {
+   Text("下载引擎",style=MaterialTheme.typography.titleMedium)
+   Text("yt-dlp $engineVersion",style=MaterialTheme.typography.bodySmall)
+   TextButton(enabled=!engineUpdating,onClick={
+    engineUpdating=true
+    model.maintenance {
+     try {
+      model.coordinator.updateEngine()
+      engineVersion=model.coordinator.engineVersion().trim()
+     } finally { engineUpdating=false }
+    }
+   }) { Text(if(engineUpdating) "正在检查更新…" else "检查 yt-dlp 更新") }
+  }
   item { Text(s(R.string.appearance),style=MaterialTheme.typography.titleMedium) }
   item { Choice(prefs.language,listOf("system","zh-CN","ja","en"),{model.setting(prefs.copy(language=it));restart()}) }
   item { Choice(prefs.theme,listOf("system","light","dark"),{model.setting(prefs.copy(theme=it))}) }
