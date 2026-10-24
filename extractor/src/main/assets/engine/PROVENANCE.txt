@@ -1,0 +1,6 @@
+yt-dlp 2026.10.21, official platform-independent zipapp (includes yt-dlp-ejs).
+Source: https://github.com/yt-dlp/yt-dlp/releases/tag/2026.10.21
+Asset: https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.21/yt-dlp
+SHA-256: b7af77f686e95f7845ce8d09d21957718febb8b48b30555adb9dd2292ad7bf14
+Verified against the release SHA2-256SUMS before bundling.
+See the repository licenses/ and THIRD_PARTY_NOTICES.md for license notices.

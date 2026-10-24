@@ -130,6 +130,10 @@ class IntegrationTest {
  }
  @Test fun nativeYtdlpParsesActualDashFormatsAndMergesSelectedTracks(): Unit=runBlocking {
   coordinator.extractor.initialize()
+  assertEquals("2026.10.21",coordinator.extractor.engineVersion().trim())
+  val engine=File(context.noBackupFilesDir,"youtubedl-android/yt-dlp/yt-dlp")
+  java.util.zip.ZipFile(engine).use { zip -> assertNotNull(zip.getEntry("yt_dlp_ejs/yt/solver/core.min.js")) }
+  assertTrue(File(context.applicationInfo.nativeLibraryDir,"libqjs.so").isFile)
   val root=File(context.cacheDir,"dash-test").apply{mkdirs()}
   val ff=FfmpegRunner(context)
   File(context.filesDir,"native-build.txt").writeText("yt-dlp: "+coordinator.extractor.engineVersion()+"\n"+ff.run(listOf("-version"))+"\n"+ff.run(listOf("-buildconf")))

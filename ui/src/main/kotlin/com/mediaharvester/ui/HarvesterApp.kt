@@ -163,6 +163,9 @@ private fun SettingsScreen(model: HarvesterViewModel,prefs: Preferences,restart:
  var authorized by rememberSaveable { mutableStateOf("") }
  var cookieHost by remember { mutableStateOf(model.coordinator.cookies.host()) }
  var cookieError by remember { mutableStateOf("") }
+ var engineVersion by remember { mutableStateOf("正在读取引擎版本…") }
+ var engineUpdating by remember { mutableStateOf(false) }
+ LaunchedEffect(Unit) { engineVersion=runCatching { model.coordinator.extractor.engineVersion().trim() }.getOrElse { "无法读取引擎版本：${it.javaClass.simpleName}" } }
  val folder=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
   if(uri!=null) runCatching { context.contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION); model.setting(prefs.copy(directory=uri.toString())) }.onFailure { cookieError=it.message.orEmpty() }
  }
@@ -170,6 +173,19 @@ private fun SettingsScreen(model: HarvesterViewModel,prefs: Preferences,restart:
   if(uri!=null) model.maintenance { model.coordinator.cookies.import(uri,authorized); cookieHost=model.coordinator.cookies.host() }
  }
  LazyColumn(verticalArrangement=Arrangement.spacedBy(12.dp),contentPadding=PaddingValues(vertical=12.dp)) {
+  item {
+   Text("下载引擎",style=MaterialTheme.typography.titleMedium)
+   Text("yt-dlp $engineVersion",style=MaterialTheme.typography.bodySmall)
+   TextButton(enabled=!engineUpdating,onClick={
+    engineUpdating=true
+    model.maintenance {
+     try {
+      model.coordinator.extractor.updateEngine()
+      engineVersion=model.coordinator.extractor.engineVersion().trim()
+     } finally { engineUpdating=false }
+    }
+   }) { Text(if(engineUpdating) "正在检查更新…" else "检查 yt-dlp 更新") }
+  }
   item { Text(s(R.string.appearance),style=MaterialTheme.typography.titleMedium) }
   item { Choice(prefs.language,listOf("system","zh-CN","ja","en"),{model.setting(prefs.copy(language=it));restart()}) }
   item { Choice(prefs.theme,listOf("system","light","dark"),{model.setting(prefs.copy(theme=it))}) }

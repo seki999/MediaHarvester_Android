@@ -178,7 +178,7 @@ class DownloadCoordinator(private val context: Context, private val http: Downlo
     // Engine exceptions can contain signed URLs or headers; persist a bounded, redacted message.
     val detail = (e.message ?: e.javaClass.simpleName).replace(Regex("https?://\\S+"),"[URL]").replace(Regex("(?i)(cookie|authorization):[^\n]*"),"[redacted]").takeLast(800)
     val hint = when {
-     detail.contains("403") -> "HTTP 403：地址过期或访问被拒绝；重试将刷新地址，请检查登录 Cookie"
+     detail.contains("403") -> "HTTP 403：YouTube/CDN 拒绝访问，已刷新地址并尝试兼容客户端；请到设置检查引擎更新，必要时重新解析并选择可用格式"
      detail.contains("429") -> "HTTP 429：请求过于频繁，请稍后重试"
      detail.contains("timed out",true) || detail.contains("timeout",true) -> "网络超时，请检查网络后重试"
      detail.contains("fragment",true) -> "分片下载失败，未跳过缺失分片；重试前将校验清单"
