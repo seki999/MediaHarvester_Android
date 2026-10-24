@@ -30,3 +30,29 @@ Local validation attempted:
 No Android SDK or emulator was found in the standard SDK locations. The supplied
 YouTube video has not been downloaded end to end or tested on an Android device.
 CI is responsible for unit tests, lint, debug APK, and emulator instrumentation.
+
+
+## Follow-up: device HTTP 403 and stale engine
+
+The user's device screenshot confirms HTTP 403 after 174.7 MiB, together with
+an engine age warning for 2025.11.12 and skipped SABR-only web formats. These are
+client-side observations, separate from the cloud proxy's CONNECT 403.
+
+The APK now bundles the official 2026.10.21 zipapp, including yt-dlp-ejs, with
+SHA-256 verified against the official release sums. Startup atomically upgrades
+the script in noBackupFilesDir without touching tasks. The existing Android
+wrapper supplies QuickJS. Settings shows the executable's actual --version and
+can fetch checksum-verified stable updates. Updates cannot replace a running
+engine; failed checksums leave the installed engine untouched.
+
+403 recovery tries different supported YouTube clients and can reselect streams
+at the original video height; stream identity checks still apply. No PO-token
+checks are disabled. HTTP downloads use bounded 10 MiB chunks. 429 stops the
+outer retry loop instead of switching clients repeatedly.
+
+New unit coverage: engine upgrade, failed checksum, interrupted engine file,
+YouTube host scoping, 403 client changes and bounded retries. The device test
+asserts the actual engine version, packaged EJS, and executes QuickJS locally.
+The cloud still cannot access the test video's YouTube endpoint, so an end-to-end
+successful download of that video remains unverified. Local Gradle still cannot
+run these tasks because the environment lacks JDK 17; CI uses JDK 17.
