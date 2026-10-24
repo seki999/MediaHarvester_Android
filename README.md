@@ -14,7 +14,7 @@
 4. 默认保存到系统 `Downloads/MediaHarvester`，图片可选 `Pictures/MediaHarvester`；设置中可以用SAF选择目录。
 5. Cookies仅通过设置明确授权单网站并手动导入Netscape cookies.txt；在本地加密保存。不读取浏览器、不绕过访问权限、DRM或验证码。
 
-重启或系统终止进程后保留任务记录，默认暂停，打开应用后手动继续。不要把应用后台服务视为永久运行保证。源站403/429、登录、删除或格式变化可能导致失败。
+重启或系统终止进程后保留任务记录和下载数据，默认暂停，打开应用后手动继续。HTTP 使用强 ETag 和带 SHA-256 的持久化检查点恢复；损坏或无检查点的数据会保留并安全重下。网站分片会保留旧尝试并重新下载，已校验的完整网站输出可恢复保存。详见[断点续传与恢复](docs/RECOVERY.md)。不要把应用后台服务视为永久运行保证。源站403/429、登录、删除或格式变化可能导致失败。
 
 ## 构建
 
@@ -59,6 +59,6 @@ python scripts/native_audit.py app/build/outputs/apk/debug/app-debug.apk
 - [第三方许可](THIRD_PARTY_NOTICES.md)、[依赖坐标](docs/dependencies.tsv)、[原生ELF检查](docs/native-audit.json)
 
 当前范围：静态HTML图片；最多100条播放列表；按任务限速；不支持直播和JS渲染页面。
-不承诺HLS/DASH跨进程碎片续传；重新下载更安全。部分动态技术错误为英文；平板采用内容宽度和自适应网格，尚未单独进行平板设备验收。
+HLS/DASH 跨进程后采用隔离目录重新下载，不拼接无法验证的旧分片；同次 yt-dlp 下载开启 `--continue` / `--part` 和缺片即失败。部分动态技术错误为英文；平板采用内容宽度和自适应网格，尚未单独进行平板设备验收。
 APK包含GPL-3.0封装及GPL FFmpeg，Android组合分发按GPL-3.0，原Windows的MIT许可证保持不变。
 完整原生对应源码/构建来源还需审核，见第三方许可文档；本地Debug测试成功不能代替正式分发审核。

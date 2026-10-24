@@ -82,22 +82,31 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
  }
  suspend fun download(url: String, selector: String, conversion: String, directory: File, id: String, rate: Long, audioOnly: Boolean = false, progress: (Float, Long, String) -> Unit): File {
   initialize(); directory.mkdirs()
-  // Cross-session fragmented streams are always restarted; URL signatures and fragments are not durable validators.
-  directory.listFiles()?.forEach { it.deleteRecursively() }
+  val identity = WebsiteRecovery.identity(url, selector, conversion)
+  val coroutine = currentCoroutineContext()
+  WebsiteRecovery.completed(directory, identity) { coroutine.ensureActive() }?.let { output ->
+   verify(output, audioOnly || conversion.isNotEmpty(), !audioOnly && conversion.isEmpty())
+   progress(100f, 0, "MH_RECOVERY REUSING_OUTPUT")
+   return output
+  }
+  val interrupted = directory.listFiles()?.any { it.isDirectory && it.name.startsWith("attempt-") } == true
+  val attempt = WebsiteRecovery.newAttempt(directory)
+  progress(0f, 0, if(interrupted) "MH_RECOVERY RESTARTING_STREAM" else "MH_RECOVERY FRESH_STREAM")
   val cookieFile=cookies(url)
   try {
   val request = YoutubeDLRequest(url).apply {
-   addOption("--newline"); addOption("--progress-template", "download:MH_PROGRESS %(progress)j"); addOption("--no-playlist"); addOption("--no-continue"); addOption("--no-mtime"); addOption("--socket-timeout", "20"); addOption("--retries", "2")
-   addOption("-f", selector); addOption("--merge-output-format", "mp4/mkv"); addOption("-o", File(directory, "media.%(ext)s").absolutePath)
+   addOption("--newline"); addOption("--progress-template", "download:MH_PROGRESS %(progress)j"); addOption("--no-playlist"); WebsiteRecovery.downloadOptions.forEach { addOption(it) }; addOption("--fragment-retries", "3"); addOption("--concurrent-fragments", "1"); addOption("--no-mtime"); addOption("--socket-timeout", "20"); addOption("--retries", "2")
+   addOption("-f", selector); addOption("--merge-output-format", "mp4/mkv"); addOption("-o", File(attempt, "media.%(ext)s").absolutePath)
    if (conversion.isNotEmpty()) { addOption("-x"); addOption("--audio-format", conversion) }
    if (rate > 0) addOption("--limit-rate", rate.toString())
    cookieFile?.let { addOption("--cookies", it.absolutePath) }
   }
   execute(request, id, progress)
   currentCoroutineContext().ensureActive()
-  val output = directory.listFiles()?.filter { it.isFile && it.extension !in listOf("part", "ytdl", "json", "temp") }?.singleOrNull() ?: error("Missing merged output")
+  val output = attempt.listFiles()?.filter { it.isFile && it.name.startsWith("media.") && it.extension in listOf("mp4","mkv","webm","m4a","mp3","opus","ogg","wav","flac","aac","mov","avi","ts") }?.singleOrNull() ?: error("Missing merged output")
   val audioOutput=audioOnly || conversion.isNotEmpty() || !selector.contains('+') && output.extension in listOf("m4a","mp3","opus","ogg","wav")
   verify(output,audioOutput,!audioOutput)
+  WebsiteRecovery.commit(directory, identity, output) { coroutine.ensureActive() }
   return output
   } finally { cookieFile?.delete() }
  }

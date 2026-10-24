@@ -1,6 +1,7 @@
 plugins { id("com.android.library"); kotlin("android"); kotlin("kapt") }
 android {
  namespace = "com.mediaharvester.database"
+ sourceSets.getByName("androidTest").assets.srcDir("schemas")
  compileSdk = 35
  defaultConfig { minSdk = 29; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
  compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

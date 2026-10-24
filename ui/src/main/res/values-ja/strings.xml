@@ -56,4 +56,13 @@
 <string name="title_label">タイトル</string>
 <string name="timestamp_label">時刻とタイトル</string>
 <string name="all_label">すべての形式</string>
+
+ <string name="recovery_interrupted">中断しました。手動で再開すると保存データを検証します。</string>
+ <string name="recovery_checking">再開前に部分ファイルを検証しています。</string>
+ <string name="recovery_http">HTTP データを保持しています。チェックポイントと強い ETag の検証後に再開します。</string>
+ <string name="recovery_restart_stream">断片を安全に再利用できないため再ダウンロードします。以前のデータは保持します。</string>
+ <string name="recovery_output">検証済みの完全なメディアを再利用し、検証と保存を続けます。</string>
+ <string name="recovery_storage">空き容量が不足しています。容量を確保して再開してください。データは保持しています。</string>
+ <string name="recovery_cleared">一時データを削除しました。次回は最初からダウンロードします。</string>
+ <string name="clear_temp_warning">未完了タスクの部分ファイルと復旧データを完全に削除します。先に全タスクを一時停止してください。失敗したタスクは再試行用に履歴に残ります。</string>
 </resources>

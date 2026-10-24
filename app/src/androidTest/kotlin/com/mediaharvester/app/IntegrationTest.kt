@@ -118,10 +118,12 @@ class IntegrationTest {
   File(context.filesDir,"native-build.txt").writeText("yt-dlp: "+coordinator.extractor.engineVersion()+"\n"+ff.run(listOf("-version"))+"\n"+ff.run(listOf("-buildconf")))
   android.util.Log.i("MH_NATIVE",File(context.filesDir,"native-build.txt").readText())
   ff.run(listOf("-f","lavfi","-i","color=c=green:s=160x120:d=2","-f","lavfi","-i","sine=frequency=440:duration=2","-c:v","libx264","-pix_fmt","yuv420p","-c:a","aac","-f","dash","-seg_duration","1",File(root,"manifest.mpd").path))
+  val denyFragments=java.util.concurrent.atomic.AtomicBoolean(false)
   server.dispatcher=object: Dispatcher() {
    override fun dispatch(request: RecordedRequest): MockResponse {
     val name=request.path.orEmpty().substringBefore('?').substringAfterLast('/')
     val file=File(root,name)
+    if(denyFragments.get() && name.endsWith(".m4s")) return MockResponse().setResponseCode(404)
     return if(file.isFile) MockResponse().setHeader("Content-Type",if(name.endsWith(".mpd")) "application/dash+xml" else "video/mp4").setBody(Buffer().write(file.readBytes())) else MockResponse().setResponseCode(404)
    }
   }
@@ -129,7 +131,20 @@ class IntegrationTest {
   val media=extractor.extract(server.url("/manifest.mpd").toString()).single()
   val selected=media.formats.first {it.id.contains('+')}
   assertEquals(120,selected.height)
-  val merged=extractor.download(media.url,selected.id,"",File(root,"output"),"dash-test",0){_,_,_->}
+  val outputRoot=File(root,"output")
+  val abandoned=File(outputRoot,"attempt-interrupted").apply {mkdirs()}
+  val fragments=File(abandoned,"media.mp4.part").apply {writeText("unverified-old-fragments")}
+  val merged=extractor.download(media.url,selected.id,"",outputRoot,"dash-test",0){_,_,_->}
+  assertEquals("unverified-old-fragments",fragments.readText())
+  val requests=server.requestCount
+  val recovered=extractor.download(media.url,selected.id,"",outputRoot,"dash-reopen",0){_,_,_->}
+  assertEquals(merged.canonicalFile,recovered.canonicalFile)
+  assertEquals(requests,server.requestCount)
+  denyFragments.set(true)
+  val missingOutput=File(root,"missing-fragments")
+  val missing=runCatching {extractor.download(media.url,selected.id,"",missingOutput,"dash-missing",0){_,_,_->}}
+  assertTrue("Missing DASH fragments must not publish incomplete media",missing.isFailure)
+  assertFalse(File(missingOutput,"completed.properties").exists())
   extractor.verify(merged,false,true)
   assertTrue(merged.length()>0)
   root.deleteRecursively()

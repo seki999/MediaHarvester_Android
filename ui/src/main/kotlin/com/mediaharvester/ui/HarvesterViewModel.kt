@@ -37,9 +37,14 @@ class HarvesterViewModel(val coordinator: DownloadCoordinator): ViewModel() {
  fun cancelParse() { parsing?.cancel(); screen.value=screen.value.copy(parsing=false) }
  fun download(items: List<Triple<Media,Format?,String>>,startService: () -> Unit) = viewModelScope.launch {
   try { items.forEach { coordinator.enqueue(it.first,it.second,it.third) }; startService() }
-  catch(e: Exception) { screen.value=screen.value.copy(error=e.message.orEmpty()) }
+  catch(e: CancellationException) { throw e }
+  catch(e: Exception) { coordinator.pauseAll("Cannot start foreground downloads; reopen the app and resume manually"); screen.value=screen.value.copy(error=e.message.orEmpty()) }
  }
- fun action(id: String,action: String,startService: () -> Unit) = viewModelScope.launch { coordinator.action(id,action); if(action in listOf("resume","retry")) startService() }
+ fun action(id: String,action: String,startService: () -> Unit) = viewModelScope.launch {
+  try { coordinator.action(id,action); if(action in listOf("resume","retry")) startService() }
+  catch(e: CancellationException) { throw e }
+  catch(e: Exception) { coordinator.action(id,"pause","Cannot start foreground downloads; resume from the visible app"); screen.value=screen.value.copy(error=e.message.orEmpty()) }
+ }
  fun setting(p: Preferences) = coordinator.settings.save(p)
  fun maintenance(block: suspend () -> Unit) = viewModelScope.launch(Dispatchers.IO) { try { block() } catch(e: Exception) { screen.value=screen.value.copy(error=e.message.orEmpty()) } }
 }
