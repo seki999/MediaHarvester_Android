@@ -80,14 +80,33 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
   val handle = currentCoroutineContext().job.invokeOnCompletion(onCancelling = true, invokeImmediately = true) { if (it != null) YoutubeDL.destroyProcessById(id) }
   try { currentCoroutineContext().ensureActive(); YoutubeDL.execute(request, id, progress).out } finally { handle.dispose() }
  }
- suspend fun download(url: String, selector: String, conversion: String, directory: File, id: String, rate: Long, audioOnly: Boolean = false, progress: (Float, Long, String) -> Unit): File {
+ suspend fun download(url: String, selector: String, conversion: String, directory: File, id: String, rate: Long, audioOnly: Boolean = false, attempt: Int = 0, progress: (Float, Long, String) -> Unit): File {
   initialize(); directory.mkdirs()
-  // Cross-session fragmented streams are always restarted; URL signatures and fragments are not durable validators.
-  directory.listFiles()?.forEach { it.deleteRecursively() }
   val cookieFile=cookies(url)
   try {
+  // Resolve fresh signed URLs on every attempt. Only reuse fragment journals for an
+  // identical selected manifest; changed signatures conservatively isolate old bytes.
+  val probe = YoutubeDLRequest(url).apply {
+   addOption("--dump-single-json"); addOption("--skip-download"); addOption("--no-playlist")
+   addOption("-f", selector); addOption("--socket-timeout", "30")
+   cookieFile?.let { addOption("--cookies", it.absolutePath) }
+  }
+  val info = JSONObject(execute(probe, id))
+  val selected = info.optJSONArray("requested_formats")
+  val streams = if(selected == null) listOf(info) else (0 until selected.length()).map { selected.getJSONObject(it) }
+  val identity = streams.joinToString("\n") { f ->
+   listOf(info.optString("id"), f.optString("format_id"), f.optString("vcodec"), f.optString("acodec"), f.optString("filesize"),
+    f.optString("protocol"), f.optJSONArray("fragments")?.toString() ?: "").joinToString("|")
+  } + "|" + conversion
+  val fragmented = streams.any { it.optString("protocol").contains("m3u8") || it.optString("protocol").contains("dash") || it.has("fragments") }
+  val invalidJournal = directory.listFiles().orEmpty().filter { it.extension == "ytdl" }.any {
+   runCatching { JSONObject(it.readText()).getJSONObject("downloader").getInt("current_fragment") >= 0 }.getOrDefault(false).not()
+  }
+  // Without an explicit fragment list, cross-session equivalence cannot be proven.
+  val safeIdentity = identity + if(invalidJournal || fragmented && streams.any { !it.has("fragments") }) UUID.randomUUID().toString() else ""
+  ResumeGuard.prepare(directory, safeIdentity)
   val request = YoutubeDLRequest(url).apply {
-   addOption("--newline"); addOption("--progress-template", "download:MH_PROGRESS %(progress)j"); addOption("--no-playlist"); addOption("--no-continue"); addOption("--no-mtime"); addOption("--socket-timeout", "20"); addOption("--retries", "2")
+   addOption("--newline"); addOption("--progress-template", "download:MH_PROGRESS %(progress)j"); addOption("--no-playlist"); addOption("--continue"); addOption("--part"); addOption("--abort-on-unavailable-fragments"); addOption("--fragment-retries", "10"); addOption("--extractor-retries", "3"); addOption("--retry-sleep", "http:exp=1:30"); addOption("--retry-sleep", "fragment:exp=1:30"); addOption("--no-mtime"); addOption("--socket-timeout", "30"); addOption("--retries", "10")
    addOption("-f", selector); addOption("--merge-output-format", "mp4/mkv"); addOption("-o", File(directory, "media.%(ext)s").absolutePath)
    if (conversion.isNotEmpty()) { addOption("-x"); addOption("--audio-format", conversion) }
    if (rate > 0) addOption("--limit-rate", rate.toString())
@@ -95,10 +114,18 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
   }
   execute(request, id, progress)
   currentCoroutineContext().ensureActive()
-  val output = directory.listFiles()?.filter { it.isFile && it.extension !in listOf("part", "ytdl", "json", "temp") }?.singleOrNull() ?: error("Missing merged output")
+  val output = directory.listFiles()?.filter { it.isFile && !it.name.startsWith(".") && !it.name.contains("Frag") && it.extension !in listOf("part", "ytdl", "json", "temp") }?.singleOrNull() ?: error("Missing merged output")
   val audioOutput=audioOnly || conversion.isNotEmpty() || !selector.contains('+') && output.extension in listOf("m4a","mp3","opus","ogg","wav")
   verify(output,audioOutput,!audioOutput)
   return output
+  } catch(e: CancellationException) { throw e }
+  catch(e: Exception) {
+   val message=e.message.orEmpty()
+   if(attempt < 2 && listOf("403", "429", "timeout", "timed out", "fragment", "connection").any { message.contains(it,true) }) {
+    delay(if(message.contains("429")) 30_000L else 2_000L shl attempt)
+    return download(url,selector,conversion,directory,id,rate,audioOnly,attempt+1,progress)
+   }
+   throw e
   } finally { cookieFile?.delete() }
  }
  fun verify(file: File, audio: Boolean = false, requireAudio: Boolean = false) {

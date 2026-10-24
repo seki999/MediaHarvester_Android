@@ -20,7 +20,7 @@ class DownloadService: Service() {
  override fun onStartCommand(intent: Intent?,flags: Int,startId: Int): Int {
   try { startForeground(1,notification("MediaHarvester"),ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) }
   catch(e: Exception) { scope.launch { coordinator.pauseAll("Foreground service unavailable"); stopSelf() }; return START_NOT_STICKY }
-  if(intent?.action=="pause" || intent?.action=="cancel") {
+  if(intent?.action=="pause") {
    scope.launch {
     coordinator.initialize()
     coordinator.dao.all().filter { it.state in listOf("QUEUED","DOWNLOADING","MERGING","VERIFYING","SAVING","WAITING_NETWORK") }.forEach { coordinator.action(it.id,intent.action!!) }
@@ -47,7 +47,7 @@ class DownloadService: Service() {
   fun action(name: String)=PendingIntent.getService(this,name.hashCode(),Intent(this,DownloadService::class.java).setAction(name),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
   val open=PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java),PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
   return NotificationCompat.Builder(this,"downloads").setSmallIcon(android.R.drawable.stat_sys_download).setContentTitle("MediaHarvester").setContentText(text).setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
-   .addAction(0,getString(com.mediaharvester.ui.R.string.pause),action("pause")).addAction(0,getString(com.mediaharvester.ui.R.string.cancel),action("cancel")).build()
+   .addAction(0,getString(com.mediaharvester.ui.R.string.pause),action("pause")).build()
  }
  override fun onTimeout(startId: Int,fgsType: Int) {
   // Stop foreground status immediately; retain persisted state even if cleanup is interrupted.

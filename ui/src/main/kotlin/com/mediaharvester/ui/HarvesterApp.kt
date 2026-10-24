@@ -132,6 +132,8 @@ private fun VideoCard(media: Media,prefs: Preferences,download: (Format?,String)
 @Composable
 private fun TaskCard(task: TaskEntity,action: (String)->Unit) {
  val context=LocalContext.current
+ var confirmDelete by remember { mutableStateOf(false) }
+ if(confirmDelete) AlertDialog(onDismissRequest={confirmDelete=false},title={Text("取消并删除下载数据？")},text={Text("暂停会保留下载进度。删除后无法恢复，需要重新下载。")},confirmButton={TextButton(onClick={confirmDelete=false;action("cancel")}) {Text("删除数据")}},dismissButton={TextButton(onClick={confirmDelete=false}) {Text("保留")}})
  val terminal=task.state in listOf("COMPLETED","CANCELLED")
  Card {
   Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -145,7 +147,7 @@ private fun TaskCard(task: TaskEntity,action: (String)->Unit) {
     if(!terminal) {
      if(task.state in listOf("PAUSED","WAITING_NETWORK","FAILED")) TextButton(onClick={action(if(task.state=="FAILED") "retry" else "resume")}) {Text(s(if(task.state=="FAILED") R.string.retry else R.string.resume))}
      else TextButton(onClick={action("pause")}) {Text(s(R.string.pause))}
-     TextButton(onClick={action("cancel")}) {Text(s(R.string.cancel))}
+     TextButton(onClick={confirmDelete=true}) {Text("取消并删除数据")}
     }
     if(task.state=="COMPLETED") {
      TextButton(onClick={runCatching { context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(task.outputUri),task.mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)) }}) {Text(s(R.string.open))}

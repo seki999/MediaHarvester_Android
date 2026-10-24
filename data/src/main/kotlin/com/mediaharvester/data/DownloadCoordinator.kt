@@ -46,15 +46,15 @@ class DownloadCoordinator(private val context: Context, private val http: Downlo
   val p=settings.flow.value
   val ext = if(conversion.isNotEmpty()) conversion else format?.ext ?: media.title.substringAfterLast('.', "")
   val title = if(p.naming=="timestamp") "${System.currentTimeMillis()}_${media.title}" else media.title
-  dao.save(TaskEntity(url=media.url,title=title,mime=if(conversion.isNotEmpty() && conversion!="mp4" || format?.audioOnly==true) "audio/${ext.ifEmpty { "mp4" }}" else media.mime,website=media.website,selector=format?.id.orEmpty(),conversion=conversion,total=media.size,destination=p.directory,gallery=p.gallery))
+  dao.save(TaskEntity(url=media.url,title=title,mime=if(conversion.isNotEmpty() && conversion!="mp4" || format?.audioOnly==true) "audio/${ext.ifEmpty { "mp4" }}" else media.mime,website=media.website,selector=format?.id.orEmpty(),conversion=conversion,total=format?.size?.takeIf { it>0 } ?: media.size,destination=p.directory,gallery=p.gallery))
  }
- suspend fun action(id: String, action: String) = control.withLock {
+ suspend fun action(id: String, action: String, reason: String = "") = control.withLock {
   val task=dao.get(id) ?: return@withLock
   val state=TaskState.valueOf(task.state)
   val next=when(action) { "resume","retry" -> TaskState.QUEUED; "cancel" -> TaskState.CANCELLED; else -> TaskState.PAUSED }
   if(!StateMachine.allows(state,next)) return@withLock
   if(next==TaskState.QUEUED && running[id]?.isActive==true) return@withLock
-  dao.transition(id,task.state,next.name,"")
+  dao.transition(id,task.state,next.name,if(next==TaskState.PAUSED) reason.ifEmpty { "已暂停，下载数据已保留，可继续下载" } else if(next==TaskState.QUEUED) "正在恢复下载并刷新媒体地址" else "")
   if(next!=TaskState.QUEUED) {
    running[id]?.cancel(); extractor.cancel(id)
    running[id]?.join(); running.remove(id)
@@ -64,7 +64,7 @@ class DownloadCoordinator(private val context: Context, private val http: Downlo
   }
  }
  suspend fun pauseAll(reason: String = "") {
-  dao.all().filter { it.state in listOf("QUEUED","DOWNLOADING","MERGING","VERIFYING","SAVING","WAITING_NETWORK") }.forEach { action(it.id,"pause") }
+  dao.all().filter { it.state in listOf("QUEUED","DOWNLOADING","MERGING","VERIFYING","SAVING","WAITING_NETWORK") }.forEach { action(it.id,"pause",reason) }
  }
  private fun connected(): Boolean {
   val cm=context.getSystemService(ConnectivityManager::class.java)
@@ -164,7 +164,15 @@ class DownloadCoordinator(private val context: Context, private val http: Downlo
    if(t.state in listOf("DOWNLOADING","MERGING","VERIFYING","SAVING")) {
     if(t.state=="SAVING") publisher.remove(t.outputUri)
     // Engine exceptions can contain signed URLs or headers; persist a bounded, redacted message.
-    val message = if(t.website) "Website engine failed (${e.javaClass.simpleName}); reparse, check access or imported cookies" else (e.message ?: e.javaClass.simpleName).replace(Regex("https?://\\S+"),"[URL]").take(240)
+    val detail = (e.message ?: e.javaClass.simpleName).replace(Regex("https?://\\S+"),"[URL]").replace(Regex("(?i)(cookie|authorization):[^\n]*"),"[redacted]").takeLast(800)
+    val hint = when {
+     detail.contains("403") -> "HTTP 403：地址过期或访问被拒绝；重试将刷新地址，请检查登录 Cookie"
+     detail.contains("429") -> "HTTP 429：请求过于频繁，请稍后重试"
+     detail.contains("timed out",true) || detail.contains("timeout",true) -> "网络超时，请检查网络后重试"
+     detail.contains("fragment",true) -> "分片下载失败，未跳过缺失分片；重试前将校验清单"
+     else -> "下载失败，请重试"
+    }
+    val message = "$hint。有效临时数据已保留。\n$detail"
     dao.transition(id,t.state,"FAILED",message)
    }
   }
