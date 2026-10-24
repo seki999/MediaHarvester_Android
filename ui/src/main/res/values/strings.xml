@@ -56,4 +56,13 @@
 <string name="title_label">Title</string>
 <string name="timestamp_label">Timestamp and title</string>
 <string name="all_label">All formats</string>
+
+ <string name="recovery_interrupted">Interrupted; retained data will be checked when you resume manually.</string>
+ <string name="recovery_checking">Checking the saved partial file before resuming.</string>
+ <string name="recovery_http">HTTP data retained; resume requires a verified checkpoint and strong ETag.</string>
+ <string name="recovery_restart_stream">Stream fragments cannot be safely reused; downloading a fresh attempt. Previous data retained.</string>
+ <string name="recovery_output">Reusing verified complete media; continuing validation and saving.</string>
+ <string name="recovery_storage">Storage full. Free space and resume; retained data has not been deleted.</string>
+ <string name="recovery_cleared">Temporary data cleared; the next attempt starts from the beginning.</string>
+ <string name="clear_temp_warning">This permanently deletes partial downloads and recovery data for unfinished tasks. Pause all tasks first. Failed tasks stay in history so they can be retried.</string>
 </resources>

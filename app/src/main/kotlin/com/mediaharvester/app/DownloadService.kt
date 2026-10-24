@@ -27,9 +27,10 @@ class DownloadService: Service() {
    }
   }
   if(loop?.isActive!=true) loop=scope.launch {
-   coordinator.initialize()
-   lock=getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"MediaHarvester:downloads").apply { acquire(6*60*60*1000L) }
+   var stopReason="Service stopped; retained downloads can be resumed manually"
    try {
+    coordinator.initialize()
+    lock=getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"MediaHarvester:downloads").apply { acquire(6*60*60*1000L) }
     while(isActive) {
      val active=coordinator.schedule(this)
      val tasks=coordinator.dao.all(); val busy=tasks.filter { it.state in listOf("DOWNLOADING","MERGING","VERIFYING","SAVING") }
@@ -39,7 +40,13 @@ class DownloadService: Service() {
      if(!active) break
      delay(700)
     }
-   } finally { if(lock?.isHeld==true) lock?.release(); stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() }
+   } catch(e: CancellationException) { throw e }
+   catch(e: Exception) { stopReason="Download service unavailable; reopen the app and resume manually" }
+   finally {
+    // Database writes can fail when storage is full. Always release foreground resources anyway.
+    try { withContext(NonCancellable) { runCatching { coordinator.pauseAll(stopReason) } } }
+    finally { if(lock?.isHeld==true) lock?.release(); stopForeground(STOP_FOREGROUND_REMOVE); stopSelf() }
+   }
   }
   return START_NOT_STICKY
  }
@@ -52,9 +59,9 @@ class DownloadService: Service() {
  override fun onTimeout(startId: Int,fgsType: Int) {
   // Stop foreground status immediately; retain persisted state even if cleanup is interrupted.
   loop?.cancel()
-  scope.launch(NonCancellable) { coordinator.pauseAll("Android foreground time budget exhausted") }
+  scope.launch(NonCancellable) { runCatching { coordinator.pauseAll("Android foreground time budget exhausted") } }
   stopForeground(STOP_FOREGROUND_REMOVE); stopSelf()
  }
- override fun onDestroy() { loop?.cancel(); scope.launch(NonCancellable) { coordinator.pauseAll("Service stopped") }; scope.cancel(); if(lock?.isHeld==true) lock?.release(); super.onDestroy() }
+ override fun onDestroy() { loop?.cancel(); scope.launch(NonCancellable) { runCatching { coordinator.pauseAll("Service stopped") } }; scope.cancel(); if(lock?.isHeld==true) lock?.release(); super.onDestroy() }
  override fun onBind(intent: Intent?) = null
 }

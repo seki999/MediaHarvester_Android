@@ -1,3 +1,28 @@
+# 2026-10-24 云端恢复功能回归（Asia/Tokyo）
+
+本节为断点续传改进后的结果；下文 2026-10-23 设备记录为历史验证，不能视为本次设备回归。
+Linux x86_64，JDK 17.0.17，Android SDK 35 / Build Tools 34.0.0，Gradle 8.9。
+
+实际执行：
+
+```sh
+./gradlew --no-daemon --max-workers=4 test :app:lintDebug :app:assembleDebug :database:assembleDebugAndroidTest :app:assembleDebugAndroidTest
+```
+
+- BUILD SUCCESSFUL；domain 6、downloader 25、extractor 7 项不同测试通过。
+- 共 38 项不同单元测试；extractor 在 Debug/Release 各跑 7 项，JUnit XML 合计 45 次执行，0 失败、0 错误、0 跳过。其他没有测试源的模块显示 NO-SOURCE，不计为测试通过数。
+- Lint Debug 报告为空（0 错误、0 警告）；Debug 默认 arm64-v8a+x86_64 APK 构建成功，apksigner 验证 v2 签名通过。
+- Room 恢复/迁移及 app 原生 DASH、图片/转换等设备测试 APK 编译成功；v1/v2 schema 已包含在 Room 测试 APK 资产中。
+- 没有 `/dev/kvm`、没有模拟器或真机。本次 **未执行** connectedAndroidTest、原生 yt-dlp/FFmpeg/媒体设备回归、真实空间耗尽、强杀或物理断电试验。
+- HTTP 新增检查点损坏、数据损坏、未提交尾部、URL 绑定、取消后新引擎恢复、日志写入失败和重复/非法 ETag 测试。日志写入失败是受控文件系统错误注入，不等同于真实 ENOSPC。
+
+本次产物为 `app/build/outputs/apk/debug/app-debug.apk`，136748438 字节，SHA-256：
+`ef494c7bef5b0b8bc2d76feec580aecb85caa819c26df58de561b778eeff2d60`。
+本节不更新下文旧 APK 的哈希和旧设备测试 JSON，也不声称 GitHub Actions 已运行成功。
+恢复边界和后续设备验收步骤见 [RECOVERY.md](RECOVERY.md)。
+
+---
+
 # 实际验证记录
 
 日期：2026-10-23（Asia/Tokyo）。宿主Windows，JDK17.0.20.1，SDK35，Gradle8.9，AGP8.7.3，Kotlin2.0.21。

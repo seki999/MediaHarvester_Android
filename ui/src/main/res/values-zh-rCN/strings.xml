@@ -56,4 +56,13 @@
 <string name="title_label">标题</string>
 <string name="timestamp_label">时间戳与标题</string>
 <string name="all_label">全部格式</string>
+
+ <string name="recovery_interrupted">下载曾中断；手动继续时将校验保留的数据。</string>
+ <string name="recovery_checking">正在校验部分文件，确认后续传。</string>
+ <string name="recovery_http">已保留 HTTP 数据；仅在检查点和强 ETag 校验通过后续传。</string>
+ <string name="recovery_restart_stream">分片无法安全复用，正在重新下载；旧尝试的数据已保留。</string>
+ <string name="recovery_output">已找到校验通过的完整媒体，继续验证并保存。</string>
+ <string name="recovery_storage">存储空间不足；请释放空间后继续，已保留下载数据。</string>
+ <string name="recovery_cleared">临时数据已清除，下次将从头下载。</string>
+ <string name="clear_temp_warning">此操作将永久删除未完成任务的部分文件和恢复数据。请先暂停所有任务。失败任务会保留在历史中，供重试使用。</string>
 </resources>

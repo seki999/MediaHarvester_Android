@@ -48,13 +48,13 @@ class DownloadCoordinator(private val context: Context, private val http: Downlo
   val title = if(p.naming=="timestamp") "${System.currentTimeMillis()}_${media.title}" else media.title
   dao.save(TaskEntity(url=media.url,title=title,mime=if(conversion.isNotEmpty() && conversion!="mp4" || format?.audioOnly==true) "audio/${ext.ifEmpty { "mp4" }}" else media.mime,website=media.website,selector=format?.id.orEmpty(),conversion=conversion,total=media.size,destination=p.directory,gallery=p.gallery))
  }
- suspend fun action(id: String, action: String) = control.withLock {
+ suspend fun action(id: String, action: String, reason: String = "") = control.withLock {
   val task=dao.get(id) ?: return@withLock
   val state=TaskState.valueOf(task.state)
   val next=when(action) { "resume","retry" -> TaskState.QUEUED; "cancel" -> TaskState.CANCELLED; else -> TaskState.PAUSED }
   if(!StateMachine.allows(state,next)) return@withLock
   if(next==TaskState.QUEUED && running[id]?.isActive==true) return@withLock
-  dao.transition(id,task.state,next.name,"")
+  if(dao.transition(id,task.state,next.name,reason)!=1) return@withLock
   if(next!=TaskState.QUEUED) {
    running[id]?.cancel(); extractor.cancel(id)
    running[id]?.join(); running.remove(id)
@@ -64,7 +64,7 @@ class DownloadCoordinator(private val context: Context, private val http: Downlo
   }
  }
  suspend fun pauseAll(reason: String = "") {
-  dao.all().filter { it.state in listOf("QUEUED","DOWNLOADING","MERGING","VERIFYING","SAVING","WAITING_NETWORK") }.forEach { action(it.id,"pause") }
+  dao.all().filter { it.state in listOf("QUEUED","DOWNLOADING","MERGING","VERIFYING","SAVING","WAITING_NETWORK") }.forEach { action(it.id,"pause",reason) }
  }
  private fun connected(): Boolean {
   val cm=context.getSystemService(ConnectivityManager::class.java)
@@ -100,6 +100,7 @@ class DownloadCoordinator(private val context: Context, private val http: Downlo
     extractor.download(task.url,task.selector,task.conversion,File(directory,"website"),id,settings.flow.value.rate,task.mime.startsWith("audio/")) { percent,eta,line ->
      // Callback is synchronous on the native engine reader thread; serialize persistence before returning.
      runBlocking {
+      if(line.startsWith("MH_RECOVERY ")) dao.recovery(id,line.removePrefix("MH_RECOVERY "))
       if(line.startsWith("MH_PROGRESS ")) runCatching {
        val p=org.json.JSONObject(line.removePrefix("MH_PROGRESS "))
        dao.progress(id,p.optLong("downloaded_bytes"),p.optLong("total_bytes",p.optLong("total_bytes_estimate")),p.optDouble("speed",0.0).toLong().coerceAtLeast(0))
@@ -108,13 +109,14 @@ class DownloadCoordinator(private val context: Context, private val http: Downlo
      }
     }.also { if(dao.get(id)?.state=="DOWNLOADING") advance(id,TaskState.DOWNLOADING,TaskState.MERGING); advance(id,TaskState.MERGING,TaskState.VERIFYING) }
    } else {
+    dao.recovery(id, if(File(directory,"payload.part.resume").isFile) "CHECKING_PARTIAL" else "FRESH_HTTP")
     var result: File?=null
     for(attempt in 0..3) {
      try {
       val latest=dao.get(id)!!
-      result=http.download(task.url,File(directory,"payload.part"),TransferMeta(latest.etag,latest.total),settings.flow.value.rate,{ dao.metadata(id,it.etag,it.total) },{ dao.progress(id,it.bytes,it.total,it.speed) }); break
+      result=http.download(task.url,File(directory,"payload.part"),TransferMeta(latest.etag,latest.total),settings.flow.value.rate,{ dao.metadata(id,it.etag,it.total) },{ dao.progress(id,it.bytes,it.total,it.speed); if(it.bytes>0) dao.recovery(id,"HTTP_CHECKPOINT") }); break
      } catch(e: CancellationException) { throw e } catch(e: IOException) {
-      if(attempt==3) throw e
+      if(attempt==3 || storageFull(e) || e is UnsafeRange || e.message?.startsWith("HTTP ")==true) throw e
       delay(1000L shl attempt)
      }
     }
@@ -135,7 +137,8 @@ class DownloadCoordinator(private val context: Context, private val http: Downlo
     val bitmap=BitmapFactory.decodeFile(output.path,sample) ?: error("Corrupted image")
     bitmap.recycle()
    } else if(!task.website) extractor.verify(output,task.mime.startsWith("audio/"))
-   val digest=sha256(output)
+   val coroutine=currentCoroutineContext()
+   val digest=sha256(output) { coroutine.ensureActive() }
    currentCoroutineContext().ensureActive()
    publication.withLock {
    currentCoroutineContext().ensureActive()
@@ -162,16 +165,25 @@ class DownloadCoordinator(private val context: Context, private val http: Downlo
   catch(e: Exception) {
    val t=dao.get(id) ?: return
    if(t.state in listOf("DOWNLOADING","MERGING","VERIFYING","SAVING")) {
-    if(t.state=="SAVING") publisher.remove(t.outputUri)
+    if(t.state=="SAVING") { publisher.remove(t.outputUri); dao.clearOutput(id) }
     // Engine exceptions can contain signed URLs or headers; persist a bounded, redacted message.
-    val message = if(t.website) "Website engine failed (${e.javaClass.simpleName}); reparse, check access or imported cookies" else (e.message ?: e.javaClass.simpleName).replace(Regex("https?://\\S+"),"[URL]").take(240)
+    val message = if(storageFull(e)) "Storage full; free space and resume. Download data has been retained." else if(t.website) "Website engine failed (${e.javaClass.simpleName}); reparse, check access or imported cookies" else (e.message ?: e.javaClass.simpleName).replace(Regex("https?://\\S+"),"[URL]").take(240)
+    if(storageFull(e)) dao.recovery(id,"STORAGE_FULL")
     dao.transition(id,t.state,"FAILED",message)
    }
   }
  }
+ private fun storageFull(error: Throwable): Boolean = generateSequence(error) { it.cause }.any {
+  it is android.database.sqlite.SQLiteFullException ||
+  it is android.system.ErrnoException && it.errno == android.system.OsConstants.ENOSPC ||
+   it.message?.contains("ENOSPC",true)==true || it.message?.contains("No space left",true)==true
+ }
  suspend fun clearHistory() { dao.clearHistory(); dao.clearRecent() }
  suspend fun clearTemporary() = control.withLock {
+  running.entries.removeAll { it.value.isCompleted }
   require(running.isEmpty()) { "Pause downloads before clearing temporary data" }
-  File(context.filesDir,"tasks").deleteRecursively(); dao.all().filter { it.state !in listOf("COMPLETED","CANCELLED") }.forEach { dao.metadata(it.id,"",0); dao.progress(it.id,0,0,0) }
+  require(dao.all().none { it.state in listOf("QUEUED","DOWNLOADING","MERGING","VERIFYING","SAVING","WAITING_NETWORK") }) { "Pause downloads before clearing temporary data" }
+  check(!File(context.filesDir,"tasks").exists() || File(context.filesDir,"tasks").deleteRecursively()) { "Could not clear all temporary files" }
+  dao.resetTransfers()
  }
 }

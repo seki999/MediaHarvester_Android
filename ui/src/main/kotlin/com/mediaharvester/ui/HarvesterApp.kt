@@ -140,6 +140,17 @@ private fun TaskCard(task: TaskEntity,action: (String)->Unit) {
    if(task.total>0) LinearProgressIndicator(progress={(task.bytes.toFloat()/task.total).coerceIn(0f,1f)},modifier=Modifier.fillMaxWidth())
    val eta=if(task.speed>0 && task.total>task.bytes) " · ${(task.total-task.bytes)/task.speed} s" else ""
    Text("${size(task.bytes)} / ${if(task.total>0) size(task.total) else "?"} · ${size(task.speed)}/s$eta",style=MaterialTheme.typography.bodySmall)
+   val recoveryLabel = when(task.recovery) {
+    "INTERRUPTED" -> R.string.recovery_interrupted
+    "CHECKING_PARTIAL" -> R.string.recovery_checking
+    "HTTP_CHECKPOINT" -> R.string.recovery_http
+    "RESTARTING_STREAM" -> R.string.recovery_restart_stream
+    "REUSING_OUTPUT" -> R.string.recovery_output
+    "STORAGE_FULL" -> R.string.recovery_storage
+    "DATA_CLEARED" -> R.string.recovery_cleared
+    else -> null
+   }
+   recoveryLabel?.let { Text(s(it), style=MaterialTheme.typography.bodySmall) }
    if(task.error.isNotEmpty()) Text(task.error,color=MaterialTheme.colorScheme.error)
    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
     if(!terminal) {
@@ -161,6 +172,10 @@ private fun SettingsScreen(model: HarvesterViewModel,prefs: Preferences,restart:
  var authorized by rememberSaveable { mutableStateOf("") }
  var cookieHost by remember { mutableStateOf(model.coordinator.cookies.host()) }
  var cookieError by remember { mutableStateOf("") }
+ var confirmClear by remember { mutableStateOf(false) }
+ if(confirmClear) AlertDialog(onDismissRequest={confirmClear=false},title={Text(s(R.string.clear_temp))},text={Text(s(R.string.clear_temp_warning))},
+  confirmButton={TextButton(onClick={confirmClear=false;model.maintenance {model.coordinator.clearTemporary()}}) {Text(s(R.string.clear_temp))}},
+  dismissButton={TextButton(onClick={confirmClear=false}) {Text(s(R.string.cancel))}})
  val folder=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
   if(uri!=null) runCatching { context.contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION); model.setting(prefs.copy(directory=uri.toString())) }.onFailure { cookieError=it.message.orEmpty() }
  }
@@ -183,7 +198,7 @@ private fun SettingsScreen(model: HarvesterViewModel,prefs: Preferences,restart:
   item { Text(cookieHost);if(cookieError.isNotEmpty()) Text(cookieError);Row { TextButton(onClick={cookies.launch(arrayOf("text/*","application/octet-stream"))},enabled=authorized.startsWith("https://")) {Text(s(R.string.import_cookies))};TextButton(onClick={model.coordinator.cookies.delete();cookieHost=""}) {Text(s(R.string.delete_cookies))} } }
   item { HorizontalDivider();Text(s(R.string.data),style=MaterialTheme.typography.titleMedium) }
   item { TextButton(onClick={model.maintenance {model.coordinator.clearHistory()}}) {Text(s(R.string.clear_history))} }
-  item { TextButton(onClick={model.maintenance {model.coordinator.clearTemporary()}}) {Text(s(R.string.clear_temp))} }
+  item { TextButton(onClick={confirmClear=true}) {Text(s(R.string.clear_temp))} }
   item { Text(s(R.string.background_hint),style=MaterialTheme.typography.bodySmall) }
  }
 }

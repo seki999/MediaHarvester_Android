@@ -37,8 +37,8 @@ object Urls {
  }
 }
 fun safeName(name: String): String = name.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_").trim(' ', '.').take(140).ifBlank { "media" }
-fun sha256(file: File): String = file.inputStream().use { input ->
+fun sha256(file: File, checkActive: () -> Unit = {}): String = file.inputStream().use { input ->
  val md = MessageDigest.getInstance("SHA-256"); val buffer = ByteArray(65536)
- while (true) { val n = input.read(buffer); if (n < 0) break; md.update(buffer, 0, n) }
+ while (true) { checkActive(); val n = input.read(buffer); if (n < 0) break; md.update(buffer, 0, n) }
  md.digest().joinToString("") { "%02x".format(it) }
 }
