@@ -15,5 +15,5 @@ internal object YoutubePolicy {
   attempt==1 -> "visionos,web_safari"
   else -> "tv,web_safari"
  }
- fun retry(message: String, attempt: Int): Boolean = attempt<2 && !message.contains("429") && listOf("403","timeout","timed out","fragment","connection").any { message.contains(it,true) }
+ fun retry(message: String, attempt: Int): Boolean = attempt<2 && !message.contains("429") && (listOf("403","timeout","timed out","fragment","connection").any { message.contains(it,true) } || attempt>0 && message.contains("Requested format is not available",true))
 }

@@ -19,6 +19,8 @@ class YoutubePolicyTest {
  @Test fun rateLimitsAndUnavailableFormatsDoNotTriggerRetryStorms() {
   assertFalse(YoutubePolicy.retry("HTTP Error 429: Too Many Requests",0))
   assertFalse(YoutubePolicy.retry("Requested format is not available",0))
+  assertTrue(YoutubePolicy.retry("Requested format is not available",1))
+  assertFalse(YoutubePolicy.retry("Requested format is not available",2))
   assertTrue(YoutubePolicy.retry("connection timed out",0))
  }
 }

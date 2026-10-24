@@ -136,7 +136,7 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
   catch(e: Exception) {
    val message=e.message.orEmpty()
    if(YoutubePolicy.retry(message,attempt)) {
-    delay(if(message.contains("429")) 30_000L else 2_000L shl attempt)
+    delay(2_000L shl attempt)
     return download(url,selector,conversion,directory,id,rate,audioOnly,attempt+1,desiredHeight,progress)
    }
    throw e
