@@ -132,7 +132,14 @@ class IntegrationTest {
   coordinator.extractor.initialize()
   assertEquals("2026.10.21",coordinator.extractor.engineVersion().trim())
   val engine=File(context.noBackupFilesDir,"youtubedl-android/yt-dlp/yt-dlp")
-  java.util.zip.ZipFile(engine).use { zip -> assertNotNull(zip.getEntry("yt_dlp_ejs/yt/solver/core.min.js")) }
+  // Official zipapps start with a shebang. Android's strict ZipFile rejects
+  // that executable prefix, while Python supports it; inspect the ZIP stream.
+  val engineBytes=engine.readBytes()
+  val zipOffset=engineBytes.indexOf(10.toByte())+1
+  assertTrue(zipOffset in 1..256)
+  java.util.zip.ZipInputStream(engineBytes.inputStream(zipOffset,engineBytes.size-zipOffset)).use { zip ->
+   assertTrue(generateSequence { zip.nextEntry }.any { it.name=="yt_dlp_ejs/yt/solver/core.min.js" })
+  }
   val quickjs=File(context.applicationInfo.nativeLibraryDir,"libqjs.so")
   assertTrue(quickjs.isFile)
   val js=ProcessBuilder(quickjs.path,"-e","console.log((1n + 2n).toString())").redirectErrorStream(true).start()
