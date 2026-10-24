@@ -165,7 +165,7 @@ private fun SettingsScreen(model: HarvesterViewModel,prefs: Preferences,restart:
  var cookieError by remember { mutableStateOf("") }
  var engineVersion by remember { mutableStateOf("正在读取引擎版本…") }
  var engineUpdating by remember { mutableStateOf(false) }
- LaunchedEffect(Unit) { engineVersion=runCatching { model.coordinator.extractor.engineVersion().trim() }.getOrElse { "无法读取引擎版本：${it.javaClass.simpleName}" } }
+ LaunchedEffect(Unit) { engineVersion=runCatching { model.coordinator.engineVersion().trim() }.getOrElse { "无法读取引擎版本：${it.javaClass.simpleName}" } }
  val folder=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
   if(uri!=null) runCatching { context.contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION); model.setting(prefs.copy(directory=uri.toString())) }.onFailure { cookieError=it.message.orEmpty() }
  }
@@ -180,8 +180,8 @@ private fun SettingsScreen(model: HarvesterViewModel,prefs: Preferences,restart:
     engineUpdating=true
     model.maintenance {
      try {
-      model.coordinator.extractor.updateEngine()
-      engineVersion=model.coordinator.extractor.engineVersion().trim()
+      model.coordinator.updateEngine()
+      engineVersion=model.coordinator.engineVersion().trim()
      } finally { engineUpdating=false }
     }
    }) { Text(if(engineUpdating) "正在检查更新…" else "检查 yt-dlp 更新") }

@@ -13,6 +13,18 @@ internal object EngineFiles {
   val engine=File(directory,"yt-dlp")
   return fields[0].takeIf { engine.isFile && sha256(engine)==fields[1] }
  }
+ fun update(directory: File, bytes: ByteArray, version: String, checksum: String, validate: () -> Unit) {
+  val previousVersion=current(directory) ?: error("Installed engine is invalid")
+  val previous=File(directory,"yt-dlp").readBytes()
+  val previousChecksum=sha256(File(directory,"yt-dlp"))
+  try {
+   install(directory,bytes,version,checksum)
+   validate()
+  } catch(e: Exception) {
+   install(directory,previous,previousVersion,previousChecksum)
+   throw e
+  }
+ }
  fun install(directory: File, bytes: ByteArray, version: String, checksum: String) {
   require(version.matches(Regex("20\\d{2}\\.\\d{2}\\.\\d{2}"))) { "Invalid engine version" }
   directory.mkdirs()

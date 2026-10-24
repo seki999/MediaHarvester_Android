@@ -40,6 +40,8 @@ class DownloadCoordinator(private val context: Context, private val http: Downlo
   dao.recover()
   initialized=true
  }
+ suspend fun engineVersion(): String = extractor.engineVersion()
+ suspend fun updateEngine(): String = extractor.updateEngine()
  suspend fun extract(url: String) = extractor.extract(url)
  suspend fun enqueue(media: Media, format: Format?, conversion: String) {
   initialize()

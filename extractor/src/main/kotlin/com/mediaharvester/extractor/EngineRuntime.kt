@@ -5,6 +5,11 @@ import com.mediaharvester.downloader.PublicNetwork
 import com.mediaharvester.downloader.awaitResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import com.yausername.youtubedl_android.YoutubeDL
+import com.yausername.youtubedl_android.YoutubeDLRequest
+import java.io.ByteArrayOutputStream
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
@@ -27,9 +32,16 @@ internal object EngineRuntime {
    return client.newCall(Request.Builder().url(url).build()).awaitResponse().use { response ->
     check(response.isSuccessful) { "引擎更新 HTTP ${response.code}；当前引擎未更改" }
     val body=response.body ?: error("Empty engine response")
-    val bytes=body.byteStream().use { it.readNBytes(limit+1) }
-    require(bytes.size<=limit) { "Engine response exceeds size limit" }
-    bytes
+    body.byteStream().use { input ->
+     val output=ByteArrayOutputStream(); val buffer=ByteArray(8192)
+     while(true) {
+      currentCoroutineContext().ensureActive()
+      val n=input.read(buffer);if(n<0) break
+      require(output.size()+n<=limit) { "Engine response exceeds size limit" }
+      output.write(buffer,0,n)
+     }
+     output.toByteArray()
+    }
    }
   }
   val release=JSONObject(fetch("https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest",2*1024*1024).toString(Charsets.UTF_8))
@@ -41,9 +53,15 @@ internal object EngineRuntime {
   val checksum=sums.lineSequence().map { it.trim().split(Regex("\\s+")) }.firstOrNull { it.size==2 && it[1]=="yt-dlp" }?.get(0) ?: error("Missing upstream engine checksum")
   require(checksum.matches(Regex("[a-f0-9]{64}")))
   val bytes=fetch(base+"yt-dlp",16*1024*1024)
+  currentCoroutineContext().ensureActive()
   val writer=lock.writeLock()
   check(writer.tryLock()) { "请先暂停下载和解析，再更新引擎" }
-  try { EngineFiles.install(directory(context),bytes,version,checksum) } finally { writer.unlock() }
+  try {
+   EngineFiles.update(directory(context),bytes,version,checksum) {
+    val actual=YoutubeDL.execute(YoutubeDLRequest(emptyList()).apply { addOption("--version") },"engine-update-check").out.trim()
+    check(actual==version) { "新引擎无法在当前运行时启动，已恢复原引擎" }
+   }
+  } finally { writer.unlock() }
   version
  }
 }
