@@ -122,6 +122,11 @@ class DownloadCoordinator(private val context: Context, private val http: Downlo
     result ?: error("No downloaded file")
    }
    currentCoroutineContext().ensureActive()
+   if(task.website) {
+    // Decode every selected stream before publication; container metadata alone
+    // cannot establish that resumed fragments form an intact media stream.
+    FfmpegRunner(context).run(listOf("-xerror","-err_detect","explode","-i",output.path,"-map","0:v?","-map","0:a?","-f","null","-"))
+   }
    if(!task.website && task.conversion.isNotEmpty()) {
     val converted=File(directory,"converted.${task.conversion}")
     FfmpegRunner(context).convert(output,converted,task.conversion); output=converted

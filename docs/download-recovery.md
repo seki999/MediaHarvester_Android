@@ -12,8 +12,9 @@ Fragment identities include selected format, codec, size, protocol and the exact
 fragment list. Changed or unverifiable manifests and malformed journals isolate
 old data in `.incompatible-*` under the task directory. Explicit cancellation
 removes it. Signed fragment URL changes can therefore cause a conservative restart;
-this is deliberate until stronger server validators are available. Metadata checks
-are not a cryptographic integrity guarantee or a full decode of every frame.
+this is deliberate until stronger server validators are available. Output streams are decoded with FFmpeg error checking before publication. This is
+not a cryptographic source-integrity guarantee. Full decoding costs time and power
+and is subject to the existing 30 minute FFmpeg timeout.
 
 Existing HTTP tests cover disconnect/reconnect, cancellation, validator changes,
 malformed ranges, and simulated metadata commit crashes. Room instrumentation tests
