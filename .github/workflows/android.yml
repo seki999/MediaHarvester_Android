@@ -33,7 +33,7 @@ jobs:
           "$SDKMANAGER" --install 'platforms;android-35' 'build-tools;35.0.0'
       - run: chmod +x gradlew
       - name: Unit tests, lint and standard debug build
-        run: ./gradlew :domain:test :downloader:test :extractor:testDebugUnitTest :app:lintDebug :app:assembleDebug --console=plain
+        run: ./gradlew :domain:test :downloader:test :extractor:testDebugUnitTest :app:lintDebug :app:assembleDebug --console=plain --profile
       - uses: actions/upload-artifact@v4
         if: success()
         with:
@@ -42,7 +42,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
           name: fast-ci-reports
           path: '**/build/reports/'
