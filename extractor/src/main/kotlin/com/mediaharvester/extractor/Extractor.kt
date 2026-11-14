@@ -83,8 +83,11 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
    val id = f.optString("format_id")
    // Reject only characters that have meaning in a yt-dlp -f selector.
    if (!id.matches(Regex("[^\\s/+,\\[\\]()*]+"))) return@mapNotNull null
-   val hasVideo = codec(f, "vcodec").let { it != null && it != "none" }
-   val hasAudio = codec(f, "acodec").let { it != null && it != "none" }
+   // Pinterest exposes HLS audio renditions with format IDs ending in audio-N.
+   // Some lack codec metadata; do not present them as video choices.
+   val pinterestAudio = id.contains(Regex("(?i)(?:^|[-_])audio[-_]\\d+$")) || f.optString("resolution").equals("audio only", true)
+   val hasVideo = !pinterestAudio && codec(f, "vcodec").let { it != null && it != "none" }
+   val hasAudio = pinterestAudio || codec(f, "acodec").let { it != null && it != "none" }
    val ext = f.optString("ext")
    val selector = if (hasVideo && !hasAudio) {
     val pool = audios.filter { it.optString("ext") == (if (ext == "mp4") "m4a" else "webm") }.ifEmpty { audios }
@@ -92,7 +95,7 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
     "$id+${best.optString("format_id")}"
    } else id
    val height = f.optInt("height")
-   val audioOnly = !hasVideo && hasAudio && codec(f, "vcodec") == "none"
+   val audioOnly = !hasVideo && hasAudio && (codec(f, "vcodec") == "none" || pinterestAudio)
    val label = when {
     hasVideo || height > 0 -> "${height.takeIf { it > 0 }?.toString()?.plus("p") ?: f.optString("resolution", "video")}  ·  $ext  ·  $id"
     audioOnly -> "Audio  ·  $ext  ·  $id"
@@ -117,7 +120,12 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
   // Resolve fresh signed URLs on every attempt. Only reuse fragment journals for an
   // identical selected manifest; changed signatures conservatively isolate old bytes.
   val youtubeClient=if(YoutubePolicy.isYoutube(url)) YoutubePolicy.client(attempt,cookieFile!=null) else null
+  val pinterest = runCatching { URI(url).host.orEmpty().lowercase().let { it == "pinterest.com" || it.endsWith(".pinterest.com") || it == "pin.it" } }.getOrDefault(false)
+  // Existing queued Pinterest tasks can point at an HLS audio-only rendition.
+  // Select a video-bearing stream (and optional audio) instead of reusing it.
+  val badPinterestSelector = pinterest && !audioOnly && selector.contains(Regex("(?i)(?:^|[-_])audio[-_]\\d+$"))
   val selection=when {
+   badPinterestSelector -> "bv*+ba/b"
    attempt==0 -> selector
    audioOnly -> "$selector/ba"
    desiredHeight>0 -> "$selector/bv*[height=$desiredHeight]+ba/b[height=$desiredHeight]"
