@@ -18,7 +18,8 @@ class FfmpegRunner(private val context: Context) {
    val log=StringBuilder()
    process.inputStream.bufferedReader().useLines { lines -> lines.forEach { if(log.length<8192) log.appendLine(it) } }
    currentCoroutineContext().ensureActive()
-   check(process.waitFor()==0) { "FFmpeg failed; unsupported format or damaged media" }
+   val exitCode=process.waitFor()
+   check(exitCode==0) { "FFmpeg exit $exitCode: ${log.toString().trim().takeLast(1800).ifBlank { "unsupported format, missing stream or damaged media" }}" }
    log.toString()
   } finally { handle.dispose(); if(process.isAlive) process.destroyForcibly() }
  } }
