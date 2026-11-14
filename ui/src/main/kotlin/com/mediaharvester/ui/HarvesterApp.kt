@@ -112,7 +112,12 @@ private fun Results(results: List<Media>,prefs: Preferences,download: (List<Trip
 }
 @Composable
 private fun VideoCard(media: Media,prefs: Preferences,download: (Format?,String)->Unit) {
- val default=media.formats.firstOrNull { prefs.quality==0 || it.height in 1..prefs.quality } ?: media.formats.filter {it.height>0}.minByOrNull {it.height} ?: media.formats.firstOrNull()
+ // Prefer genuine video formats. Audio-only HLS renditions must never be
+ // silently selected as the default for a video post.
+ val videoFormats=media.formats.filter { !it.audioOnly }
+ val default=videoFormats.firstOrNull { prefs.quality==0 || it.height in 1..prefs.quality }
+  ?: videoFormats.filter { it.height>0 }.minByOrNull { it.height }
+  ?: videoFormats.firstOrNull() ?: media.formats.firstOrNull()
  var chosen by remember(media) { mutableStateOf(default) }
  var conversion by rememberSaveable { mutableStateOf("") }
  Card {
@@ -121,11 +126,12 @@ private fun VideoCard(media: Media,prefs: Preferences,download: (Format?,String)
    Text(media.title,style=MaterialTheme.typography.titleMedium)
    Text("${media.mime} · ${if(media.duration>0) "${media.duration.toLong()} s" else ""} ${if(media.size>0) size(media.size) else s(R.string.unknown_size)}")
    if(media.formats.isNotEmpty()) {
+    if(videoFormats.isEmpty() && media.website) Text("当前解析结果只有音频，没有可下载的视频轨道。请更新 yt-dlp 并重新解析。",color=MaterialTheme.colorScheme.error)
     Choice(chosen?.label.orEmpty(),media.formats.map {it.label},{label->chosen=media.formats.first {it.label==label}})
     if(chosen?.audioOnly==true) Choice(conversion.ifEmpty {"original"},listOf("original","mp3","m4a","opus"),{conversion=if(it=="original") "" else it})
    }
    if(!media.website && (media.mime.startsWith("audio/") || media.mime.startsWith("video/"))) Choice(conversion.ifEmpty {"original"},listOf("original","mp3","m4a","opus") + if(media.mime.startsWith("video/")) listOf("mp4") else emptyList(),{conversion=if(it=="original") "" else it})
-   Button(onClick={download(chosen,if(chosen?.audioOnly==true || !media.website) conversion else "")}) { Text(s(R.string.download)) }
+   Button(onClick={download(chosen,if(chosen?.audioOnly==true || !media.website) conversion else "")},enabled=chosen!=null || !media.website) { Text(s(R.string.download)) }
   }
  }
 }
