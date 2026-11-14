@@ -78,7 +78,10 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
   // Same rules as desktop format_options(): a missing/null codec means "unknown", not "no stream".
   // Unknown-track formats (common for generic/embedded sites) are kept as original formats instead of being dropped.
   fun codec(f: JSONObject, key: String) = if (f.isNull(key)) null else f.optString(key)
-  val audios = raw.filter { codec(it, "vcodec") == "none" && codec(it, "acodec").let { a -> a != null && a != "none" } }
+  val audios = raw.filter { f ->
+   val id=f.optString("format_id")
+   (codec(f, "vcodec") == "none" || id.contains(Regex("(?i)(?:^|[-_])audio[-_]\\d+$"))) && codec(f, "acodec") != "none"
+  }
   val options = raw.mapNotNull { f ->
    val id = f.optString("format_id")
    // Reject only characters that have meaning in a yt-dlp -f selector.
@@ -91,8 +94,8 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
    val ext = f.optString("ext")
    val selector = if (hasVideo && !hasAudio) {
     val pool = audios.filter { it.optString("ext") == (if (ext == "mp4") "m4a" else "webm") }.ifEmpty { audios }
-    val best = pool.maxByOrNull { if (it.isNull("abr")) it.optDouble("tbr", 0.0) else it.optDouble("abr", 0.0) } ?: return@mapNotNull null
-    "$id+${best.optString("format_id")}"
+    val best = pool.maxByOrNull { if (it.isNull("abr")) it.optDouble("tbr", 0.0) else it.optDouble("abr", 0.0) }
+    if (best == null) id else "$id+${best.optString("format_id")}"
    } else id
    val height = f.optInt("height")
    val audioOnly = !hasVideo && hasAudio && (codec(f, "vcodec") == "none" || pinterestAudio)
@@ -140,6 +143,17 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
   val info = JSONObject(execute(probe, id))
   val selected = info.optJSONArray("requested_formats")
   val streams = if(selected == null) listOf(info) else (0 until selected.length()).map { selected.getJSONObject(it) }
+  // Enforce real video selection before fetching large files. Some Pinterest
+  // audio-only HLS variants are mislabeled as mp4 when codec fields are absent.
+  if (!audioOnly && conversion.isEmpty()) {
+   val hasVideoStream = streams.any { f ->
+    val fid=f.optString("format_id")
+    val vcodec=f.optString("vcodec")
+    val audioRendition=fid.contains(Regex("(?i)(?:^|[-_])audio[-_]\\d+$"))
+    !audioRendition && (vcodec.isNotEmpty() && vcodec!="none" || f.optInt("height")>0)
+   }
+   require(hasVideoStream) { "所选格式不包含视频画面（仅音频）。请返回首页重新解析并选择视频分辨率；若无视频选项，请更新 yt-dlp。" }
+  }
   if(desiredHeight==0) desiredHeight=streams.maxOfOrNull { it.optInt("height",0) } ?: 0
   val identity = streams.joinToString("\n") { f ->
    listOf(info.optString("id"), f.optString("format_id"), f.optString("vcodec"), f.optString("acodec"), f.optString("filesize"),
