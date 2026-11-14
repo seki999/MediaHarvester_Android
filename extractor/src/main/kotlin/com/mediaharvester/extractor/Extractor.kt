@@ -157,7 +157,10 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
   currentCoroutineContext().ensureActive()
   val output = directory.listFiles()?.filter { it.isFile && !it.name.startsWith(".") && !it.name.contains("Frag") && it.extension !in listOf("part", "ytdl", "json", "temp") }?.singleOrNull() ?: error("Missing merged output")
   val audioOutput=audioOnly || conversion.isNotEmpty() || !selector.contains('+') && output.extension in listOf("m4a","mp3","opus","ogg","wav")
-  verify(output,audioOutput,!audioOutput)
+  // yt-dlp/HLS outputs can be decodable even when Android's metadata retriever
+  // cannot read duration/track flags. The coordinator performs a strict full
+  // FFmpeg decode before publishing website media; defer ambiguous metadata to it.
+  verify(output,audioOutput,!audioOutput, allowFfmpegValidation = true)
   return output
   } catch(e: CancellationException) { throw e }
   catch(e: Exception) {
@@ -169,14 +172,21 @@ class Extractor(private val context: Context, private val cookies: (String) -> F
    throw e
   } finally { cookieFile?.delete() }
  }
- fun verify(file: File, audio: Boolean = false, requireAudio: Boolean = false) {
+ fun verify(file: File, audio: Boolean = false, requireAudio: Boolean = false, allowFfmpegValidation: Boolean = false) {
   require(file.length() > 0) { "Empty media" }
   val retriever = MediaMetadataRetriever()
   try {
-   retriever.setDataSource(file.absolutePath)
-   require((retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0) > 0) { "Invalid media duration" }
-   require(retriever.extractMetadata(if (audio) MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO else MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) == "yes") { "Missing output stream" }
-   if(requireAudio) require(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO)=="yes") { "Merged audio missing" }
+   // Broken/unrecognized metadata must not incorrectly reject a full HLS download.
+   // Website media is decoded by FFmpeg before publication, while direct HTTP
+   // downloads still require positive duration and appropriate stream metadata.
+   val metadataReadable = runCatching {
+    retriever.setDataSource(file.absolutePath)
+    val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+    val primary = retriever.extractMetadata(if (audio) MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO else MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) == "yes"
+    val secondary = !requireAudio || retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes"
+    duration > 0 && primary && secondary
+   }.getOrDefault(false)
+   if (!metadataReadable && !allowFfmpegValidation) error("Invalid media duration or missing output stream")
   } finally { retriever.release() }
  }
  suspend fun updateEngine(): String = withContext(Dispatchers.IO) { initialize(); EngineRuntime.update(context) }
