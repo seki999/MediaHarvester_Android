@@ -33,11 +33,11 @@ jobs:
           "$SDKMANAGER" --install 'platforms;android-35' 'build-tools;35.0.0'
       - run: chmod +x gradlew
       - name: Unit tests, lint and standard debug build
-        run: ./gradlew :domain:test :downloader:test :extractor:testDebugUnitTest :app:lintDebug :app:assembleDebug --console=plain --profile
+        run: ./gradlew :domain:test :downloader:test :extractor:testDebugUnitTest :app:lintDebug :app:assembleDebug -PtargetAbis=arm64-v8a --console=plain --profile
       - uses: actions/upload-artifact@v4
         if: success()
         with:
-          name: MediaHarvester-Android-Debug-APK
+          name: MediaHarvester-Android-ARM64-Debug-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
