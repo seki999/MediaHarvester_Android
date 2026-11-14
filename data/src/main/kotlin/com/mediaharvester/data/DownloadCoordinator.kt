@@ -134,7 +134,13 @@ class DownloadCoordinator(private val context: Context, private val http: Downlo
    if(task.website) {
     // Decode every selected stream before publication; container metadata alone
     // cannot establish that resumed fragments form an intact media stream.
-    FfmpegRunner(context).run(listOf("-xerror","-err_detect","explode","-i",output.path,"-map","0:v?","-map","0:a?","-f","null","-"))
+    val requiredStream = if (task.mime.startsWith("audio/")) "0:a:0" else "0:v:0"
+    val decodeArgs = mutableListOf("-xerror","-err_detect","explode","-i",output.path,"-map",requiredStream)
+    if (!task.mime.startsWith("audio/")) decodeArgs.addAll(listOf("-map","0:a?"))
+    decodeArgs.addAll(listOf("-f","null","-"))
+    // Requiring a real primary stream prevents a zero-stream file from
+    // passing when Android metadata is unavailable (Pinterest/HLS).
+    FfmpegRunner(context).run(decodeArgs)
    }
    if(!task.website && task.conversion.isNotEmpty()) {
     val converted=File(directory,"converted.${task.conversion}")
